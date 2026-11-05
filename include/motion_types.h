@@ -1,10 +1,10 @@
-#ifndef BPX_SDK_MOTION_TYPES_H_
-#define BPX_SDK_MOTION_TYPES_H_
+#ifndef MIRRORME_ROBOT_SDK_MOTION_TYPES_H_
+#define MIRRORME_ROBOT_SDK_MOTION_TYPES_H_
 
 #include <array>
 #include <cstdint>
 
-namespace bpx_sdk {
+namespace mirrorme_robot_sdk {
 
 constexpr int kJointCount = 12;
 
@@ -82,6 +82,6 @@ struct LegOdom {
     float angular_velocity[3] = {0.0f, 0.0f, 0.0f};    // Body-frame angular velocity, rad/s.
 };
 
-}  // namespace bpx_sdk
+}  // namespace mirrorme_robot_sdk
 
-#endif  // BPX_SDK_MOTION_TYPES_H_
+#endif  // MIRRORME_ROBOT_SDK_MOTION_TYPES_H_

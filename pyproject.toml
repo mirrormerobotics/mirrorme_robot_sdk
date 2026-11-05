@@ -14,11 +14,11 @@ manylinux-aarch64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
-# The wheel already bundles bpx_sdk_x86_64.dll under bpx_sdk/lib and loads it
+# The wheel already bundles mirrorme_robot_sdk_x86_64.dll under mirrorme_robot_sdk/lib and loads it
 # via os.add_dll_directory; cibuildwheel 4.x runs delvewheel by default, which
 # fails to locate the DLL and is not needed here.
 repair-wheel-command = ""
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
-environment = { BPX_SDK_ARCH = "aarch64", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+environment = { MIRRORME_ROBOT_SDK_ARCH = "aarch64", MACOSX_DEPLOYMENT_TARGET = "11.0" }

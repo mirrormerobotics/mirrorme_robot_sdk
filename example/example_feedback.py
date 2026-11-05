@@ -1,5 +1,5 @@
 """Formatting shared by the robot state and control examples."""
-import bpx_sdk
+import mirrorme_robot_sdk
 
 
 def print_identity_availability(robot):
@@ -14,7 +14,7 @@ def format_control_mode(robot):
     mode = robot.getControlMode()
     if mode is None:
         return "<unavailable>"
-    return f"{bpx_sdk.ControlMode(mode).name} ({mode})"
+    return f"{mirrorme_robot_sdk.ControlMode(mode).name} ({mode})"
 
 
 def format_power_state(robot):

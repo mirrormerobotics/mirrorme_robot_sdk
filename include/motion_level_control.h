@@ -1,11 +1,11 @@
-#ifndef BPX_SDK_MOTION_LEVEL_CONTROL_H_
-#define BPX_SDK_MOTION_LEVEL_CONTROL_H_
+#ifndef MIRRORME_ROBOT_SDK_MOTION_LEVEL_CONTROL_H_
+#define MIRRORME_ROBOT_SDK_MOTION_LEVEL_CONTROL_H_
 
 #include "request_robot_state.h"
 
 #include <memory>
 
-namespace bpx_sdk {
+namespace mirrorme_robot_sdk {
 
 class MotionLevelControl : public RequestRobotState {
 public:
@@ -70,6 +70,6 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace bpx_sdk
+}  // namespace mirrorme_robot_sdk
 
-#endif  // BPX_SDK_MOTION_LEVEL_CONTROL_H_
+#endif  // MIRRORME_ROBOT_SDK_MOTION_LEVEL_CONTROL_H_

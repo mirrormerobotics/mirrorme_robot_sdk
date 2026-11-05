@@ -4,13 +4,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import bpx_sdk
+import mirrorme_robot_sdk
 from example_options import parse_options
 from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
 
 def print_version():
-    print(f"bpx_sdk version={getattr(bpx_sdk, '__version__', 'unknown')}")
+    print(f"mirrorme_robot_sdk version={getattr(mirrorme_robot_sdk, '__version__', 'unknown')}")
 
 
 def print_robot_version(joint_level_control):
@@ -58,7 +58,7 @@ def print_robot_status(joint_level_control):
 
 
 def make_leg_target(abad, hip, knee):
-    target = [0.0] * bpx_sdk.JOINT_COUNT
+    target = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
     for leg in range(4):
         target[3 * leg + 0] = abad
         target[3 * leg + 1] = hip
@@ -91,13 +91,13 @@ def run_hold_stage(joint_level_control, hold_pos, duration, next_status_print):
 def run_move_stage(joint_level_control, start_pos, target_pos, duration, next_status_print):
     status_print_period = 0.2
     start = time.monotonic()
-    cmd_pos = [0.0] * bpx_sdk.JOINT_COUNT
+    cmd_pos = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
 
     while True:
         elapsed = time.monotonic() - start
         alpha = min(elapsed / duration, 1.0)
 
-        for i in range(bpx_sdk.JOINT_COUNT):
+        for i in range(mirrorme_robot_sdk.JOINT_COUNT):
             cmd_pos[i] = start_pos[i] + alpha * (target_pos[i] - start_pos[i])
 
         if not send_position_command(joint_level_control, cmd_pos):
@@ -121,7 +121,7 @@ def main():
 
     print_version()
 
-    joint_level_control = bpx_sdk.JointLevelControl()
+    joint_level_control = mirrorme_robot_sdk.JointLevelControl()
 
     # Set the robot address.
     joint_level_control.setRobotIp(options.robot_ip)
@@ -168,10 +168,10 @@ def main():
         first_target_pos = make_leg_target(0.0, 0.8, -1.8)
         second_target_pos = make_leg_target(0.0, 1.2, -2.7)
 
-        kp = [100.0] * bpx_sdk.JOINT_COUNT
-        kd = [2.0] * bpx_sdk.JOINT_COUNT
-        vel = [0.0] * bpx_sdk.JOINT_COUNT
-        tff = [0.0] * bpx_sdk.JOINT_COUNT
+        kp = [100.0] * mirrorme_robot_sdk.JOINT_COUNT
+        kd = [2.0] * mirrorme_robot_sdk.JOINT_COUNT
+        vel = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
+        tff = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
         initial_command_deadline = time.monotonic() + 1.0
         while not joint_level_control.setJointCommand(kp, init_pos, kd, vel, tff):
             if time.monotonic() >= initial_command_deadline:

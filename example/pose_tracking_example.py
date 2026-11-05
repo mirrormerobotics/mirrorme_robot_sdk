@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import bpx_sdk
+import mirrorme_robot_sdk
 from example_options import parse_options
 
 COMMAND_INTERVAL = 0.02
@@ -50,7 +50,7 @@ def wait_until(ready, error, timeout=3.0):
 
 def main():
     options = parse_options(False)
-    motion = bpx_sdk.MotionLevelControl()
+    motion = mirrorme_robot_sdk.MotionLevelControl()
     motion.setRobotIp(options.robot_ip)
     motion.setRobotStateUploadPort(options.robot_state_port)
     motion.setTcpLocalPort(options.tcp_local_port)
@@ -67,21 +67,21 @@ def main():
             raise RuntimeError('connection failed')
         print('request stand-up', flush=True)
         wait_until(motion.setStandUp, 'stand-up request failed')
-        wait_until(lambda: motion.getCurrentMotionState() == bpx_sdk.MotionState.Motion,
+        wait_until(lambda: motion.getCurrentMotionState() == mirrorme_robot_sdk.MotionState.Motion,
                    'robot did not finish standing up', POSTURE_TIMEOUT)
         print('stand-up complete; request pose tracking', flush=True)
         wait_until(motion.setPoseTracking, 'pose request failed')
-        wait_until(lambda: motion.getCurrentGait() == bpx_sdk.MotionGait.PoseTracking,
+        wait_until(lambda: motion.getCurrentGait() == mirrorme_robot_sdk.MotionGait.PoseTracking,
                    'robot did not enter pose tracking')
         # Public API order is x, y, z, r.
         for axis_name, axis_index in [('x', 0), ('y', 1), ('z', 2), ('r', 3)]:
             sweep_pose_axis(motion, axis_index, axis_name)
         motion.setWalk()
-        wait_until(lambda: motion.getCurrentGait() == bpx_sdk.MotionGait.Walk,
+        wait_until(lambda: motion.getCurrentGait() == mirrorme_robot_sdk.MotionGait.Walk,
                    'robot did not return to walking gait')
         print('pose sweeps complete; request lying down', flush=True)
         wait_until(motion.setSitDown, 'lying-down request failed')
-        wait_until(lambda: motion.getCurrentMotionState() == bpx_sdk.MotionState.LyingDown,
+        wait_until(lambda: motion.getCurrentMotionState() == mirrorme_robot_sdk.MotionState.LyingDown,
                    'robot did not finish lying down', POSTURE_TIMEOUT)
         print('lying-down complete', flush=True)
     finally:

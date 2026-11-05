@@ -1,5 +1,5 @@
 #include "joint_level_control.h"
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "example_options.h"
 #include "example_feedback.h"
 
@@ -14,12 +14,12 @@ namespace {
 
 void printVersion() {
     std::cout
-        << BPX_SDK_PROJECT_NAME
-        << " version=" << BPX_SDK_PROJECT_VERSION
+        << MIRRORME_ROBOT_SDK_PROJECT_NAME
+        << " version=" << MIRRORME_ROBOT_SDK_PROJECT_VERSION
         << std::endl;
 }
 
-void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
+void printRobotVersion(const mirrorme_robot_sdk::RequestRobotState& robot_state) {
     uint16_t robot_major = 0;
     uint16_t robot_minor = 0;
     uint16_t robot_patch = 0;
@@ -40,7 +40,7 @@ void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
     }
 }
 
-void printRobotStatus(bpx_sdk::JointLevelControl& joint_level_control) {
+void printRobotStatus(mirrorme_robot_sdk::JointLevelControl& joint_level_control) {
     uint8_t current_state = 0;
     uint8_t current_gait = 0;
     float joint_timestamp = 0.0f;
@@ -64,8 +64,8 @@ void printRobotStatus(bpx_sdk::JointLevelControl& joint_level_control) {
 
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "[state] control_mode="
-              << bpx_sdk::example::formatControlMode(joint_level_control)
-              << " " << bpx_sdk::example::formatPowerState(joint_level_control);
+              << mirrorme_robot_sdk::example::formatControlMode(joint_level_control)
+              << " " << mirrorme_robot_sdk::example::formatPowerState(joint_level_control);
     if (has_motion_state) {
         std::cout << " motion=" << static_cast<int>(current_state)
                   << " gait=" << static_cast<int>(current_gait);
@@ -105,12 +105,12 @@ std::array<float, 12> makeLegTarget(float abad, float hip, float knee) {
     return target;
 }
 
-bool sendPositionCommand(bpx_sdk::JointLevelControl& joint_level_control,
+bool sendPositionCommand(mirrorme_robot_sdk::JointLevelControl& joint_level_control,
                          const std::array<float, 12>& pos) {
     return joint_level_control.setJointPosition(pos);
 }
 
-bool runHoldStage(bpx_sdk::JointLevelControl& joint_level_control,
+bool runHoldStage(mirrorme_robot_sdk::JointLevelControl& joint_level_control,
                   const std::array<float, 12>& hold_pos,
                   std::chrono::milliseconds duration,
                   std::chrono::steady_clock::time_point& next_status_print) {
@@ -135,7 +135,7 @@ bool runHoldStage(bpx_sdk::JointLevelControl& joint_level_control,
     return true;
 }
 
-bool runMoveStage(bpx_sdk::JointLevelControl& joint_level_control,
+bool runMoveStage(mirrorme_robot_sdk::JointLevelControl& joint_level_control,
                   const std::array<float, 12>& start_pos,
                   const std::array<float, 12>& target_pos,
                   std::chrono::milliseconds duration,
@@ -181,8 +181,8 @@ bool runMoveStage(bpx_sdk::JointLevelControl& joint_level_control,
 }  // namespace
 
 int main(int argc, char** argv) {
-    bpx_sdk::example::Options options;
-    if (!bpx_sdk::example::parseOptions(argc, argv, true, &options)) {
+    mirrorme_robot_sdk::example::Options options;
+    if (!mirrorme_robot_sdk::example::parseOptions(argc, argv, true, &options)) {
         return 1;
     }
     if (options.help_requested) {
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
 
     printVersion();
 
-    bpx_sdk::JointLevelControl joint_level_control;
+    mirrorme_robot_sdk::JointLevelControl joint_level_control;
 
     // Set the robot address.
     joint_level_control.setRobotIp(options.robot_ip.c_str());
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(joint_level_control);
-    bpx_sdk::example::printIdentityAvailability(joint_level_control);
+    mirrorme_robot_sdk::example::printIdentityAvailability(joint_level_control);
 
     // connect() starts the TCP subscription asynchronously.  Do not use the
     // first high-rate UDP state as proof that JointLevelControl is ready to

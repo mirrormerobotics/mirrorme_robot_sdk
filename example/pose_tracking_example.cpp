@@ -16,7 +16,7 @@ constexpr auto kNeutralPause = 1s;
 constexpr auto kPostureTimeout = 10s;
 constexpr int kSweepSteps = kSweepDuration / kCommandInterval;
 
-void SweepPoseAxis(bpx_sdk::MotionLevelControl& motion, size_t axis_index,
+void SweepPoseAxis(mirrorme_robot_sdk::MotionLevelControl& motion, size_t axis_index,
                    const char* axis_name) {
     const auto start = std::chrono::steady_clock::now();
     for (int step = 0; step <= kSweepSteps; ++step) {
@@ -52,15 +52,15 @@ void WaitUntil(Predicate ready, const char* error,
 }
 
 int main(int argc, char** argv) {
-    bpx_sdk::example::Options options;
-    if (!bpx_sdk::example::parseOptions(argc, argv, false, &options)) {
+    mirrorme_robot_sdk::example::Options options;
+    if (!mirrorme_robot_sdk::example::parseOptions(argc, argv, false, &options)) {
         return 1;
     }
     if (options.help_requested) {
         std::cout << "Automatically stand up, run four pose sweeps, then lie down.\n";
         return 0;
     }
-    bpx_sdk::MotionLevelControl motion;
+    mirrorme_robot_sdk::MotionLevelControl motion;
     motion.setRobotIp(options.robot_ip.c_str());
     motion.setRobotStateUploadPort(options.robot_state_port);
     motion.setTcpLocalPort(options.tcp_local_port);
@@ -75,12 +75,12 @@ int main(int argc, char** argv) {
         std::cout << "request stand-up" << std::endl;
         WaitUntil([&] { return motion.setStandUp(); }, "stand-up request failed");
         WaitUntil([&] {
-            return motion.getCurrentMotionStateEnum() == bpx_sdk::MotionState::Motion;
+            return motion.getCurrentMotionStateEnum() == mirrorme_robot_sdk::MotionState::Motion;
         }, "robot did not finish standing up", kPostureTimeout);
         std::cout << "stand-up complete; request pose tracking" << std::endl;
         WaitUntil([&] { return motion.setPoseTracking(); }, "pose request failed");
         WaitUntil([&] {
-            return motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::PoseTracking;
+            return motion.getCurrentGaitEnum() == mirrorme_robot_sdk::MotionGait::PoseTracking;
         }, "robot did not enter pose tracking");
         // Public API order is x, y, z, r.
         SweepPoseAxis(motion, 0, "x");
@@ -89,12 +89,12 @@ int main(int argc, char** argv) {
         SweepPoseAxis(motion, 3, "r");
         motion.setWalk();
         WaitUntil([&] {
-            return motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::Walk;
+            return motion.getCurrentGaitEnum() == mirrorme_robot_sdk::MotionGait::Walk;
         }, "robot did not return to walking gait");
         std::cout << "pose sweeps complete; request lying down" << std::endl;
         WaitUntil([&] { return motion.setSitDown(); }, "lying-down request failed");
         WaitUntil([&] {
-            return motion.getCurrentMotionStateEnum() == bpx_sdk::MotionState::LyingDown;
+            return motion.getCurrentMotionStateEnum() == mirrorme_robot_sdk::MotionState::LyingDown;
         }, "robot did not finish lying down", kPostureTimeout);
         std::cout << "lying-down complete" << std::endl;
     } catch (const std::exception& error) {

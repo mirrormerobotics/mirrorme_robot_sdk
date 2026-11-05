@@ -12,8 +12,8 @@ __pycache__/
 
 .cibuildwheel-cache/
 
-bpx_sdk/_bpx_sdk*.so
-bpx_sdk/lib/
+mirrorme_robot_sdk/_mirrorme_robot_sdk*.so
+mirrorme_robot_sdk/lib/
 
 .venv/
 .venv-*/

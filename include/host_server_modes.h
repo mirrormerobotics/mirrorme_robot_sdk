@@ -1,9 +1,9 @@
-#ifndef BPX_SDK_HOST_SERVER_MODES_H_
-#define BPX_SDK_HOST_SERVER_MODES_H_
+#ifndef MIRRORME_ROBOT_SDK_HOST_SERVER_MODES_H_
+#define MIRRORME_ROBOT_SDK_HOST_SERVER_MODES_H_
 
 #include <cstdint>
 
-namespace bpx_protocol {
+namespace mirrorme_robot_sdk::protocol {
 
 // SubscribeStateResp.reserved[0] identifies control-mode feedback revision 1;
 // reserved[1] carries 0=remote control, 1=navigator, 255=unknown.
@@ -23,6 +23,6 @@ constexpr uint8_t ToWireValue(HostServerMode mode) {
     return static_cast<uint8_t>(mode);
 }
 
-}  // namespace bpx_protocol
+}  // namespace mirrorme_robot_sdk::protocol
 
-#endif  // BPX_SDK_HOST_SERVER_MODES_H_
+#endif  // MIRRORME_ROBOT_SDK_HOST_SERVER_MODES_H_

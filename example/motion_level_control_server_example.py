@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import bpx_sdk
+import mirrorme_robot_sdk
 from example_feedback import format_control_mode, format_power_state, print_identity_availability
 from request_robot_state_example import print_robot_version
 
@@ -43,13 +43,13 @@ def parse_args():
             "          jump up|front|back|left|right, quit"
         ),
     )
-    parser.add_argument("--robot-ip", default=bpx_sdk.DEFAULT_SERVER_IP)
+    parser.add_argument("--robot-ip", default=mirrorme_robot_sdk.DEFAULT_SERVER_IP)
     parser.add_argument(
         "--state-port",
         "--robot-state-port",
         dest="robot_state_port",
         type=_uint16,
-        default=bpx_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT,
+        default=mirrorme_robot_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT,
     )
     parser.add_argument("--tcp-local-port", type=_uint16, default=0)
     parser.add_argument("--state-rate", dest="state_rate_hz", type=_positive_uint16, default=100)
@@ -60,14 +60,14 @@ def parse_args():
 
 def motion_state_name(value):
     try:
-        return bpx_sdk.MotionState(value).name
+        return mirrorme_robot_sdk.MotionState(value).name
     except ValueError:
         return "Unknown"
 
 
 def motion_gait_name(value):
     try:
-        return bpx_sdk.MotionGait(value).name
+        return mirrorme_robot_sdk.MotionGait(value).name
     except ValueError:
         return "Unknown"
 
@@ -204,8 +204,8 @@ def serve_client(conn, motion, sdk_lock):
 def main():
     options = parse_args()
 
-    print(f"bpx_sdk version={getattr(bpx_sdk, '__version__', 'unknown')}")
-    motion = bpx_sdk.MotionLevelControl()
+    print(f"mirrorme_robot_sdk version={getattr(mirrorme_robot_sdk, '__version__', 'unknown')}")
+    motion = mirrorme_robot_sdk.MotionLevelControl()
     motion.setRobotIp(options.robot_ip)
     motion.setRobotStateUploadPort(options.robot_state_port)
     motion.setTcpLocalPort(options.tcp_local_port)

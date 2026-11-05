@@ -1,6 +1,6 @@
 """Loopback integration checks; never connects to robot hardware.
 
-Set BPX_EXAMPLE_BUILD to a CMake build directory to also check C++ examples.
+Set MIRRORME_ROBOT_SDK_EXAMPLE_BUILD to a CMake build directory to also check C++ examples.
 """
 import os
 from pathlib import Path
@@ -29,8 +29,8 @@ class ServerClientExamplesTest(unittest.TestCase):
     def test_interoperability(self):
         servers = [[sys.executable, str(ROOT / 'example/motion_level_control_server_example.py')]]
         clients = [[sys.executable, str(ROOT / 'example/motion_level_control_client_example.py')]]
-        if os.environ.get('BPX_EXAMPLE_BUILD'):
-            build = Path(os.environ['BPX_EXAMPLE_BUILD'])
+        if os.environ.get('MIRRORME_ROBOT_SDK_EXAMPLE_BUILD'):
+            build = Path(os.environ['MIRRORME_ROBOT_SDK_EXAMPLE_BUILD'])
             servers.append([str(build / 'motion_level_control_server_example')])
             clients.append([str(build / 'motion_level_control_client_example')])
         for server in servers:

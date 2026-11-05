@@ -1,6 +1,6 @@
 """Check the real examples' UDP sweeps against a local peer, without robot hardware.
 
-Set BPX_EXAMPLE_BUILD to a directory containing the C++ pose_tracking_example.
+Set MIRRORME_ROBOT_SDK_EXAMPLE_BUILD to a directory containing the C++ pose_tracking_example.
 """
 import os
 from pathlib import Path
@@ -28,8 +28,8 @@ class PoseTrackingExamplesTest(unittest.TestCase):
 
     def test_axis_order_endpoints_and_neutral_pauses(self):
         commands = [[sys.executable, str(ROOT / 'example/pose_tracking_example.py')]]
-        if os.environ.get('BPX_EXAMPLE_BUILD'):
-            commands.append([str(Path(os.environ['BPX_EXAMPLE_BUILD']) / 'pose_tracking_example')])
+        if os.environ.get('MIRRORME_ROBOT_SDK_EXAMPLE_BUILD'):
+            commands.append([str(Path(os.environ['MIRRORME_ROBOT_SDK_EXAMPLE_BUILD']) / 'pose_tracking_example')])
         for command in commands:
             with self.subTest(command=command[0]):
                 self.check_sweep(command)

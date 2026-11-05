@@ -10,7 +10,7 @@ _dll_directory_handle = None
 
 
 def _has_native_extension(package_dir):
-    return any(package_dir.glob("_bpx_sdk*.pyd")) or any(package_dir.glob("_bpx_sdk*.so"))
+    return any(package_dir.glob("_mirrorme_robot_sdk*.pyd")) or any(package_dir.glob("_mirrorme_robot_sdk*.so"))
 
 
 def _find_installed_native_package_dir():
@@ -18,7 +18,7 @@ def _find_installed_native_package_dir():
         if not entry:
             continue
         try:
-            candidate = (Path(entry).resolve() / "bpx_sdk").resolve()
+            candidate = (Path(entry).resolve() / "mirrorme_robot_sdk").resolve()
         except OSError:
             continue
         if candidate == _package_dir:
@@ -38,12 +38,12 @@ if not _has_native_extension(_native_package_dir):
 if sys.platform == "win32":
     _machine = platform.machine().lower()
     if _machine not in {"amd64", "x64", "x86_64"}:
-        raise ImportError("bpx_sdk only supports 64-bit Python on Windows")
+        raise ImportError("mirrorme_robot_sdk only supports 64-bit Python on Windows")
     _dll_dir = _native_package_dir / "lib"
     if _dll_dir.exists():
         _dll_directory_handle = os.add_dll_directory(str(_dll_dir))
 
-from ._bpx_sdk import (
+from ._mirrorme_robot_sdk import (
     DEFAULT_CLIENT_JOINT_STATE_UDP_PORT,
     DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT,
     DEFAULT_SERVER_IP,
@@ -53,7 +53,7 @@ from ._bpx_sdk import (
     RequestRobotState,
     __version__,
 )
-from . import _bpx_sdk as _native
+from . import _mirrorme_robot_sdk as _native
 
 
 class ControlMode(IntEnum):

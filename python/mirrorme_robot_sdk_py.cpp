@@ -1,8 +1,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include "bpx_sdk_config.h"
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_config.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "joint_level_control.h"
 #include "motion_level_control.h"
 #include "motion_types.h"
@@ -16,12 +16,12 @@
 
 namespace {
 
-using bpx_sdk::JointLevelControl;
-using bpx_sdk::LegOdom;
-using bpx_sdk::MotionLevelControl;
-using bpx_sdk::RequestRobotState;
-using bpx_sdk::RobotFaultEntry;
-using bpx_sdk::RobotFaultState;
+using mirrorme_robot_sdk::JointLevelControl;
+using mirrorme_robot_sdk::LegOdom;
+using mirrorme_robot_sdk::MotionLevelControl;
+using mirrorme_robot_sdk::RequestRobotState;
+using mirrorme_robot_sdk::RobotFaultEntry;
+using mirrorme_robot_sdk::RobotFaultState;
 
 struct RequestRobotStateObject {
     PyObject_HEAD
@@ -52,7 +52,7 @@ RequestRobotState* state_cpp(PyObject* self) {
     if (PyObject_TypeCheck(self, &RequestRobotStateType)) {
         return reinterpret_cast<RequestRobotStateObject*>(self)->cpp;
     }
-    PyErr_SetString(PyExc_TypeError, "expected a BPX SDK object");
+    PyErr_SetString(PyExc_TypeError, "expected a MirrorMe Robot SDK object");
     return nullptr;
 }
 
@@ -500,7 +500,7 @@ PyObject* state_get_robot_serial_number(PyObject* self, PyObject*) {
 PyObject* state_get_control_mode(PyObject* self, PyObject*) {
     RequestRobotState* cpp = state_cpp(self);
     if (!cpp) return nullptr;
-    bpx_sdk::ControlMode mode = bpx_sdk::ControlMode::Unknown;
+    mirrorme_robot_sdk::ControlMode mode = mirrorme_robot_sdk::ControlMode::Unknown;
     if (!cpp->getControlMode(&mode)) Py_RETURN_NONE;
     return PyLong_FromLong(static_cast<long>(mode));
 }
@@ -508,7 +508,7 @@ PyObject* state_get_control_mode(PyObject* self, PyObject*) {
 PyObject* state_get_robot_model(PyObject* self, PyObject*) {
     RequestRobotState* cpp = state_cpp(self);
     if (!cpp) return nullptr;
-    bpx_sdk::RobotModel model = bpx_sdk::RobotModel::Unknown;
+    mirrorme_robot_sdk::RobotModel model = mirrorme_robot_sdk::RobotModel::Unknown;
     if (!cpp->getRobotModel(&model)) Py_RETURN_NONE;
     return PyLong_FromLong(static_cast<long>(model));
 }
@@ -1022,8 +1022,8 @@ int add_int_constant(PyObject* module, const char* name, long value) {
 
 PyModuleDef ModuleDef = {
     PyModuleDef_HEAD_INIT,
-    "_bpx_sdk",
-    "Python bindings for BPX SDK Open.",
+    "_mirrorme_robot_sdk",
+    "Python bindings for MirrorMe Robot SDK.",
     -1,
     nullptr,
     nullptr,
@@ -1034,9 +1034,9 @@ PyModuleDef ModuleDef = {
 
 }  // namespace
 
-PyMODINIT_FUNC PyInit__bpx_sdk() {
+PyMODINIT_FUNC PyInit__mirrorme_robot_sdk() {
     if (ready_type(&RequestRobotStateType,
-                   "bpx_sdk.RequestRobotState",
+                   "mirrorme_robot_sdk.RequestRobotState",
                    sizeof(RequestRobotStateObject),
                    reinterpret_cast<destructor>(request_dealloc),
                    reinterpret_cast<initproc>(request_init),
@@ -1047,7 +1047,7 @@ PyMODINIT_FUNC PyInit__bpx_sdk() {
     }
     MotionLevelControlType.tp_base = &RequestRobotStateType;
     if (ready_type(&MotionLevelControlType,
-                   "bpx_sdk.MotionLevelControl",
+                   "mirrorme_robot_sdk.MotionLevelControl",
                    sizeof(MotionLevelControlObject),
                    reinterpret_cast<destructor>(motion_dealloc),
                    reinterpret_cast<initproc>(motion_init),
@@ -1058,7 +1058,7 @@ PyMODINIT_FUNC PyInit__bpx_sdk() {
     }
     JointLevelControlType.tp_base = &RequestRobotStateType;
     if (ready_type(&JointLevelControlType,
-                   "bpx_sdk.JointLevelControl",
+                   "mirrorme_robot_sdk.JointLevelControl",
                    sizeof(JointLevelControlObject),
                    reinterpret_cast<destructor>(joint_dealloc),
                    reinterpret_cast<initproc>(joint_init),
@@ -1083,34 +1083,34 @@ PyMODINIT_FUNC PyInit__bpx_sdk() {
         return nullptr;
     }
 
-    PyModule_AddStringConstant(module, "__version__", BPX_SDK_PROJECT_VERSION);
-    PyModule_AddStringConstant(module, "DEFAULT_SERVER_IP", bpx_sdk::DEFAULT_SERVER_IP);
-    add_int_constant(module, "DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT", bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
-    add_int_constant(module, "DEFAULT_CLIENT_JOINT_STATE_UDP_PORT", bpx_sdk::DEFAULT_CLIENT_JOINT_STATE_UDP_PORT);
-    add_int_constant(module, "JOINT_COUNT", bpx_sdk::kJointCount);
+    PyModule_AddStringConstant(module, "__version__", MIRRORME_ROBOT_SDK_PROJECT_VERSION);
+    PyModule_AddStringConstant(module, "DEFAULT_SERVER_IP", mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+    add_int_constant(module, "DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT", mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+    add_int_constant(module, "DEFAULT_CLIENT_JOINT_STATE_UDP_PORT", mirrorme_robot_sdk::DEFAULT_CLIENT_JOINT_STATE_UDP_PORT);
+    add_int_constant(module, "JOINT_COUNT", mirrorme_robot_sdk::kJointCount);
 
-    add_int_constant(module, "MOTION_STATE_LYING_DOWN", static_cast<long>(bpx_sdk::MotionState::LyingDown));
-    add_int_constant(module, "MOTION_STATE_STANDING_UP", static_cast<long>(bpx_sdk::MotionState::StandingUp));
-    add_int_constant(module, "MOTION_STATE_PASSIVE", static_cast<long>(bpx_sdk::MotionState::Passive));
-    add_int_constant(module, "MOTION_STATE_SIT_DOWN", static_cast<long>(bpx_sdk::MotionState::SitDown));
-    add_int_constant(module, "MOTION_STATE_CHARGING_SIT_DOWN", static_cast<long>(bpx_sdk::MotionState::ChargingSitDown));
-    add_int_constant(module, "MOTION_STATE_MOTION", static_cast<long>(bpx_sdk::MotionState::Motion));
+    add_int_constant(module, "MOTION_STATE_LYING_DOWN", static_cast<long>(mirrorme_robot_sdk::MotionState::LyingDown));
+    add_int_constant(module, "MOTION_STATE_STANDING_UP", static_cast<long>(mirrorme_robot_sdk::MotionState::StandingUp));
+    add_int_constant(module, "MOTION_STATE_PASSIVE", static_cast<long>(mirrorme_robot_sdk::MotionState::Passive));
+    add_int_constant(module, "MOTION_STATE_SIT_DOWN", static_cast<long>(mirrorme_robot_sdk::MotionState::SitDown));
+    add_int_constant(module, "MOTION_STATE_CHARGING_SIT_DOWN", static_cast<long>(mirrorme_robot_sdk::MotionState::ChargingSitDown));
+    add_int_constant(module, "MOTION_STATE_MOTION", static_cast<long>(mirrorme_robot_sdk::MotionState::Motion));
 
-    add_int_constant(module, "MOTION_GAIT_WALK", static_cast<long>(bpx_sdk::MotionGait::Walk));
-    add_int_constant(module, "MOTION_GAIT_BIPEDAL", static_cast<long>(bpx_sdk::MotionGait::Bipedal));
-    add_int_constant(module, "MOTION_GAIT_FLIP", static_cast<long>(bpx_sdk::MotionGait::Flip));
-    add_int_constant(module, "MOTION_GAIT_WALK_PHASE", static_cast<long>(bpx_sdk::MotionGait::WalkPhase));
-    add_int_constant(module, "MOTION_GAIT_POSE_TRACKING", static_cast<long>(bpx_sdk::MotionGait::PoseTracking));
-    add_int_constant(module, "MOTION_GAIT_RUNNING", static_cast<long>(bpx_sdk::MotionGait::Running));
-    add_int_constant(module, "MOTION_GAIT_TUMBLER", static_cast<long>(bpx_sdk::MotionGait::Tumbler));
-    add_int_constant(module, "MOTION_GAIT_JUMP", static_cast<long>(bpx_sdk::MotionGait::Jump));
-    add_int_constant(module, "CONTROL_MODE_UNKNOWN", static_cast<long>(bpx_sdk::ControlMode::Unknown));
-    add_int_constant(module, "CONTROL_MODE_REMOTE_CONTROL", static_cast<long>(bpx_sdk::ControlMode::RemoteControl));
-    add_int_constant(module, "CONTROL_MODE_NAVIGATOR", static_cast<long>(bpx_sdk::ControlMode::Navigator));
-    add_int_constant(module, "ROBOT_MODEL_UNKNOWN", static_cast<long>(bpx_sdk::RobotModel::Unknown));
-    add_int_constant(module, "ROBOT_MODEL_BPX", static_cast<long>(bpx_sdk::RobotModel::BPX));
-    add_int_constant(module, "ROBOT_MODEL_BPX_PRO", static_cast<long>(bpx_sdk::RobotModel::BPXPro));
-    add_int_constant(module, "ROBOT_MODEL_BPW", static_cast<long>(bpx_sdk::RobotModel::BPW));
+    add_int_constant(module, "MOTION_GAIT_WALK", static_cast<long>(mirrorme_robot_sdk::MotionGait::Walk));
+    add_int_constant(module, "MOTION_GAIT_BIPEDAL", static_cast<long>(mirrorme_robot_sdk::MotionGait::Bipedal));
+    add_int_constant(module, "MOTION_GAIT_FLIP", static_cast<long>(mirrorme_robot_sdk::MotionGait::Flip));
+    add_int_constant(module, "MOTION_GAIT_WALK_PHASE", static_cast<long>(mirrorme_robot_sdk::MotionGait::WalkPhase));
+    add_int_constant(module, "MOTION_GAIT_POSE_TRACKING", static_cast<long>(mirrorme_robot_sdk::MotionGait::PoseTracking));
+    add_int_constant(module, "MOTION_GAIT_RUNNING", static_cast<long>(mirrorme_robot_sdk::MotionGait::Running));
+    add_int_constant(module, "MOTION_GAIT_TUMBLER", static_cast<long>(mirrorme_robot_sdk::MotionGait::Tumbler));
+    add_int_constant(module, "MOTION_GAIT_JUMP", static_cast<long>(mirrorme_robot_sdk::MotionGait::Jump));
+    add_int_constant(module, "CONTROL_MODE_UNKNOWN", static_cast<long>(mirrorme_robot_sdk::ControlMode::Unknown));
+    add_int_constant(module, "CONTROL_MODE_REMOTE_CONTROL", static_cast<long>(mirrorme_robot_sdk::ControlMode::RemoteControl));
+    add_int_constant(module, "CONTROL_MODE_NAVIGATOR", static_cast<long>(mirrorme_robot_sdk::ControlMode::Navigator));
+    add_int_constant(module, "ROBOT_MODEL_UNKNOWN", static_cast<long>(mirrorme_robot_sdk::RobotModel::Unknown));
+    add_int_constant(module, "ROBOT_MODEL_BPX", static_cast<long>(mirrorme_robot_sdk::RobotModel::BPX));
+    add_int_constant(module, "ROBOT_MODEL_BPX_PRO", static_cast<long>(mirrorme_robot_sdk::RobotModel::BPXPro));
+    add_int_constant(module, "ROBOT_MODEL_BPW", static_cast<long>(mirrorme_robot_sdk::RobotModel::BPW));
 
 
     return module;

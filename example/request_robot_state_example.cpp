@@ -1,5 +1,5 @@
 #include "request_robot_state.h"
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "example_options.h"
 #include "example_feedback.h"
 
@@ -14,12 +14,12 @@ namespace {
 
 void printVersion() {
     std::cout
-        << BPX_SDK_PROJECT_NAME
-        << " version=" << BPX_SDK_PROJECT_VERSION
+        << MIRRORME_ROBOT_SDK_PROJECT_NAME
+        << " version=" << MIRRORME_ROBOT_SDK_PROJECT_VERSION
         << std::endl;
 }
 
-void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
+void printRobotVersion(const mirrorme_robot_sdk::RequestRobotState& robot_state) {
     uint16_t robot_major = 0;
     uint16_t robot_minor = 0;
     uint16_t robot_patch = 0;
@@ -43,8 +43,8 @@ void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    bpx_sdk::example::Options options;
-    if (!bpx_sdk::example::parseOptions(argc, argv, false, &options)) {
+    mirrorme_robot_sdk::example::Options options;
+    if (!mirrorme_robot_sdk::example::parseOptions(argc, argv, false, &options)) {
         return 1;
     }
     if (options.help_requested) {
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 
     printVersion();
 
-    bpx_sdk::RequestRobotState robot_state;
+    mirrorme_robot_sdk::RequestRobotState robot_state;
 
     // Set the target robot IP.
     robot_state.setRobotIp(options.robot_ip.c_str());
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(robot_state);
-    bpx_sdk::example::printIdentityAvailability(robot_state);
+    mirrorme_robot_sdk::example::printIdentityAvailability(robot_state);
 
     while (true) {
         const auto now = std::chrono::system_clock::now();
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
         std::cout << "robot state: " << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S")
                   << '.' << std::setw(3) << std::setfill('0') << milliseconds
                   << std::setfill(' ') << std::endl;
-        std::cout << "  control_mode=" << bpx_sdk::example::formatControlMode(robot_state)
+        std::cout << "  control_mode=" << mirrorme_robot_sdk::example::formatControlMode(robot_state)
                   << std::endl;
 
         float joint_pos[12] = {};
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
                       << std::endl;
         }
 
-        bpx_sdk::LegOdom leg_odom {};
+        mirrorme_robot_sdk::LegOdom leg_odom {};
         if (robot_state.getLegOdom(&leg_odom)) {
             std::cout << "  leg_odom.position=(" << leg_odom.position[0] << ", "
                       << leg_odom.position[1] << ", " << leg_odom.position[2] << ")"
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
                       << std::endl;
         }
 
-        std::cout << "  " << bpx_sdk::example::formatPowerState(robot_state) << std::endl;
+        std::cout << "  " << mirrorme_robot_sdk::example::formatPowerState(robot_state) << std::endl;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

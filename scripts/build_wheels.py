@@ -163,7 +163,7 @@ def legacy_cibuildwheel_python() -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build BPX SDK Python wheels.")
+    parser = argparse.ArgumentParser(description="Build MirrorMe Robot SDK Python wheels.")
     parser.add_argument(
         "--out-dir",
         default="wheelhouse",

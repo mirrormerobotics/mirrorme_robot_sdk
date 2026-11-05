@@ -1,7 +1,7 @@
 import argparse
 from dataclasses import dataclass
 
-import bpx_sdk
+import mirrorme_robot_sdk
 
 
 @dataclass
@@ -32,8 +32,8 @@ def _positive_uint16(text):
 
 def _state_rate(text):
     value = _positive_uint16(text)
-    if value > 200:
-        raise argparse.ArgumentTypeError("expected a value in range 1..200")
+    if value > 1000:
+        raise argparse.ArgumentTypeError("expected a value in range 1..1000")
     return value
 
 
@@ -41,18 +41,18 @@ def parse_options(enable_joint_state_port=False):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--robot-ip",
-        default=bpx_sdk.DEFAULT_SERVER_IP,
-        help=f"Robot IP address (default: {bpx_sdk.DEFAULT_SERVER_IP})",
+        default=mirrorme_robot_sdk.DEFAULT_SERVER_IP,
+        help=f"Robot IP address (default: {mirrorme_robot_sdk.DEFAULT_SERVER_IP})",
     )
     parser.add_argument(
         "--state-port",
         "--robot-state-port",
         dest="robot_state_port",
         type=_uint16,
-        default=bpx_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT,
+        default=mirrorme_robot_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT,
         help=(
             "Local UDP port for robot state "
-            f"(default: {bpx_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT})"
+            f"(default: {mirrorme_robot_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT})"
         ),
     )
     parser.add_argument(
@@ -66,20 +66,20 @@ def parse_options(enable_joint_state_port=False):
         dest="state_rate_hz",
         type=_state_rate,
         default=100,
-        help="Requested robot state upload rate, 1..200 (default: 100)",
+        help="Requested robot state upload rate, 1..1000 (default: 100)",
     )
     if enable_joint_state_port:
         parser.add_argument(
             "--joint-state-port",
             type=_uint16,
-            default=bpx_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT,
+            default=mirrorme_robot_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT,
             help=(
                 "Local UDP port for high-rate joint state "
-                f"(default: {bpx_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT})"
+                f"(default: {mirrorme_robot_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT})"
             ),
         )
     else:
-        parser.set_defaults(joint_state_port=bpx_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT)
+        parser.set_defaults(joint_state_port=mirrorme_robot_sdk.DEFAULT_CLIENT_JOINT_STATE_UDP_PORT)
 
     args = parser.parse_args()
     return Options(

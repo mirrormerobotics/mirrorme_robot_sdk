@@ -1,11 +1,11 @@
-#ifndef BPX_SDK_ROBOT_IDENTITY_PROTOCOL_H_
-#define BPX_SDK_ROBOT_IDENTITY_PROTOCOL_H_
+#ifndef MIRRORME_ROBOT_SDK_ROBOT_IDENTITY_PROTOCOL_H_
+#define MIRRORME_ROBOT_SDK_ROBOT_IDENTITY_PROTOCOL_H_
 
 #include "host_server_modes.h"
 #include <cstddef>
 #include <cstdint>
 
-namespace bpx_protocol {
+namespace mirrorme_robot_sdk::protocol {
 // TCP response to a 24-byte SubscribeStateReq with mode=IdentityQuery.
 // SN is printable ASCII, length-delimited, and is never truncated.
 struct RobotIdentityResponse {
@@ -24,5 +24,5 @@ static_assert(alignof(RobotIdentityResponse) == 2, "Identity response alignment 
 static_assert(offsetof(RobotIdentityResponse, session_id) == 2, "Identity session offset mismatch");
 static_assert(offsetof(RobotIdentityResponse, serial_number) == 8, "Identity SN offset mismatch");
 static_assert(offsetof(RobotIdentityResponse, reserved) == 40, "Identity extension offset mismatch");
-}  // namespace bpx_protocol
+}  // namespace mirrorme_robot_sdk::protocol
 #endif

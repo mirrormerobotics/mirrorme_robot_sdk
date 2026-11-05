@@ -1,14 +1,14 @@
-# BPX SDK Open
+# MirrorMe Robot SDK
 
 **English** | [中文](README.zh-CN.md)
 
-`bpx_sdk_open` provides a lightweight C++ SDK for reading BPX robot state and sending motion-level or joint-level control commands.
+MirrorMe Robot SDK provides C++ and Python interfaces for robot state queries, motion-level control, and joint-level control.
 
-SDK version: `1.0.11`
+SDK version: `2.0.0`
 
-Documentation updated: `2026-10-28`
+Documentation updated: `2026-11-05`
 
-The SDK offers three usage modes:
+The current BPX implementation offers three usage modes:
 
 | Mode                 | Description                                                                                                                      |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -18,6 +18,26 @@ The SDK offers three usage modes:
 
 The SDK interfaces and state fields are still in an early implementation stage. More APIs and readable robot state fields will be added over time.
 
+## Project Scope and Product Support
+
+MirrorMe Robot SDK is maintained for shared use across the company's robot products,
+including internal development and external integration. The public distribution
+repository is [mirrormerobotics/mirrorme_robot_sdk](https://github.com/mirrormerobotics/mirrorme_robot_sdk).
+The current implementation is derived from BPX SDK; a shared SDK does not imply
+that every model supports every API.
+
+| Product | Identity | Current control scope |
+| --- | --- | --- |
+| BPX (C2) | Model and serial-number queries | Existing motion APIs and 12-joint APIs; individual actions remain model-specific. |
+| BPX-Pro (C2) | Model and serial-number queries | Existing supported motion APIs and 12-joint APIs; bipedal upright/inverted stances are unavailable. |
+| BPW (A2) | Model value and identity-response decoding are present | Full state/control adaptation is not established here. The existing 12-joint API does not represent BPW's 16 joints, including four wheel joints. |
+| BAOBAO (C1) and other products | No dedicated adapter in this distribution | Product adaptation and validation remain future work. |
+
+The network defaults, motion states, gaits, velocity limits, state rates, and
+robot time-sync behavior below describe the current BPX-family protocol and the
+firmware that implements those features. They are not universal product defaults.
+Check the model and firmware support before using each API.
+
 ## Before You Start
 
 Update the SDK and ensure your robot firmware supports the features you intend to use.
@@ -25,22 +45,22 @@ Update the SDK and ensure your robot firmware supports the features you intend t
 ## Directory Structure
 
 ```text
-bpx_sdk_open/
+mirrorme_robot_sdk/
   CMakeLists.txt
   include/
-    bpx_sdk_config.h
-    bpx_sdk_version.h
+    mirrorme_robot_sdk_config.h
+    mirrorme_robot_sdk_version.h
     motion_types.h
     request_robot_state.h
     motion_level_control.h
     joint_level_control.h
   lib/
-    libbpx_sdk_x86_64.so
-    libbpx_sdk_aarch64.so
-    libbpx_sdk_aarch64.dylib
-    bpx_sdk_x86_64.lib
+    libmirrorme_robot_sdk_x86_64.so
+    libmirrorme_robot_sdk_aarch64.so
+    libmirrorme_robot_sdk_aarch64.dylib
+    mirrorme_robot_sdk_x86_64.lib
   bin/
-    bpx_sdk_x86_64.dll
+    mirrorme_robot_sdk_x86_64.dll
   example/
     request_robot_state_example.cpp
     request_robot_state_example.py
@@ -56,7 +76,7 @@ bpx_sdk_open/
 
 ## General Configuration
 
-Public configuration is defined in `include/bpx_sdk_config.h`.
+Public configuration is defined in `include/mirrorme_robot_sdk_config.h`.
 
 | Name                                  | Description                                                |
 | ------------------------------------- | ---------------------------------------------------------- |
@@ -67,7 +87,7 @@ Public configuration is defined in `include/bpx_sdk_config.h`.
 Command destination ports are fixed on the robot side and are not exposed as public SDK configuration.
 
 The SDK default robot IP is `10.21.20.1` (RJ45 direct connection). To change the default IP, edit the
-configuration in `include/bpx_sdk_config.h`, or call the `setRobotIp` API in your program to set the target
+configuration in `include/mirrorme_robot_sdk_config.h`, or call the `setRobotIp` API in your program to set the target
 robot IP. See [Network Connection and IP](#network-connection-and-ip) for the IP to use with each connection method.
 
 ## Network Connection and IP
@@ -87,7 +107,7 @@ Header: `include/motion_types.h`
 
 The SDK provides type-safe motion state and gait enumerations for reading the current and previous motion state and gait.
 
-Motion state `bpx_sdk::MotionState`:
+Motion state `mirrorme_robot_sdk::MotionState`:
 
 | Enum Value   | Raw Value | Description              |
 | ------------ | --------- | ------------------------ |
@@ -98,7 +118,7 @@ Motion state `bpx_sdk::MotionState`:
 | `Motion`     | `6`       | In motion.               |
 | `ChargingSitDown` | `24` | Charging sit-down in progress. |
 
-Gait `bpx_sdk::MotionGait`:
+Gait `mirrorme_robot_sdk::MotionGait`:
 
 | Enum Value     | Raw Value |
 | -------------- | --------- |
@@ -145,7 +165,7 @@ if (robot_state.getSubGait(&raw_sub_gait)) {
 }
 ```
 
-Leg odometry `bpx_sdk::LegOdom`:
+Leg odometry `mirrorme_robot_sdk::LegOdom`:
 
 | Field              | Size | Description                                   |
 | ------------------ | ---- | --------------------------------------------- |
@@ -170,11 +190,47 @@ Velocity commands use `[x, y, yaw]`, where `x` and `y` are body-frame linear vel
 
 `Flip` does not use walking velocity commands. `Tumbler` requests self-righting with six zero axes and does not use velocity commands. `PoseTracking` limits pose tracking commands instead of body velocity commands. For `Walk`, `Bipedal`, `WalkPhase`, and `Running`, lateral velocity and yaw rate are further reduced as `abs(x)` increases, so the table lists the per-axis base limits.
 
+#### `Walk` Start Threshold
+
+Call `setVelocityControlFlag(true)` before using
+`MotionLevelControl::setVelocity(x, y, yaw)` for absolute velocities.
+`setVelocity()` does not enable this mode automatically.
+
+```cpp
+motion.setVelocityControlFlag(true);
+motion.setVelocity(0.3f, 0.0f, 0.0f);
+```
+
+After velocity limiting, inter-axis constraints, and smoothing, the current
+`Walk` controller tests the processed `[vx, vy, yaw]` command:
+
+```text
+sqrt(vx² + vy² + yaw²) < 0.2
+```
+
+Below this threshold, the controller zeros the periodic gait-phase input and
+the robot normally stays standing. This is the Walk policy's low-speed handling;
+the SDK does not discard or directly zero the velocity command.
+For steady commands without limiting, the condition approximately applies to
+the three `setVelocity()` arguments:
+
+- A single-axis theoretical start boundary is the numeric value `0.2`, in m/s for
+  `vx`/`vy` and rad/s for `yaw`.
+- This is a combined threshold: `[0.15, 0.15, 0.0]` has magnitude about `0.212`,
+  while `[0.1, 0.1, 0.1]` has magnitude about `0.173`.
+- The comparison is strictly less than `0.2`; avoid relying on the exact boundary.
+  Use an absolute value of `0.25`--`0.3` for single-axis start checks.
+- Smoothing can keep the processed command below the threshold for the first few
+  control cycles, producing a short start delay.
+
+The formula combines the numeric linear and angular velocity values directly.
+It is the current controller's threshold rule, not a speed norm with one physical unit.
+
 ## State Query Layer
 
 Header: `include/request_robot_state.h`
 
-Class: `bpx_sdk::RequestRobotState`
+Class: `mirrorme_robot_sdk::RequestRobotState`
 
 This layer subscribes to robot state data and provides read-only state query APIs. Use it when your application only needs telemetry and does not send control commands.
 
@@ -183,9 +239,9 @@ Joint and IMU data from the state query layer is updated at a lower rate, suitab
 Connection and setup:
 
 ```cpp
-bpx_sdk::RequestRobotState robot_state;
-robot_state.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-robot_state.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::RequestRobotState robot_state;
+robot_state.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+robot_state.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 robot_state.setTcpLocalPort(0);
 robot_state.setRobotStateUploadRate(100);
 
@@ -194,7 +250,7 @@ if (!robot_state.connect()) {
 }
 ```
 
-`setRobotStateUploadRate()` requests an upper limit for ordinary UDP state packets sent from the robot to the SDK client; it does not control the SDK-to-robot motion command rate. Call it before `connect()`. The valid range is 1--200 Hz, the default is 100 Hz, and the robot falls back to 100 Hz for invalid values. A change made while connected takes effect after disconnecting and reconnecting.
+`setRobotStateUploadRate()` requests an upper limit for ordinary UDP state packets sent from the robot to the SDK client; it does not control the SDK-to-robot motion command rate. Call it before `connect()`. The valid range is 1--1000 Hz, the default is 100 Hz, and the robot falls back to 100 Hz for invalid values. A change made while connected takes effect after disconnecting and reconnecting.
 
 `connect()` starts a desired connection. If the robot is temporarily unavailable, the SDK reconnects in the background with bounded backoff from 100 ms to 2 s; use `isConnected()` for the live TCP state. The connection is reported live only after the first complete robot response. A bounded response deadline also discards a half-open socket and starts reconnection when Wi-Fi loss, power loss, or a hard robot reboot produces no TCP FIN/RST. Explicit `disconnect()`, object destruction, or process exit stops all retries. Every confirmed connection and background reconnection automatically sends one time-sync request on the active TCP session. Reconnection never restores a pre-disconnect non-zero motion or joint target.
 
@@ -304,16 +360,16 @@ controller), and `Navigator=2` (navigation). Missing feedback or disconnection r
 
 Header: `include/motion_level_control.h`
 
-Class: `bpx_sdk::MotionLevelControl`
+Class: `mirrorme_robot_sdk::MotionLevelControl`
 
 This layer sends high-level robot control commands. It inherits from `RequestRobotState`, so a single object can both send motion commands and read robot state.
 
 Connection and setup:
 
 ```cpp
-bpx_sdk::MotionLevelControl motion;
-motion.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-motion.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::MotionLevelControl motion;
+motion.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+motion.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 motion.setTcpLocalPort(0);
 motion.setRobotStateUploadRate(100);
 motion.setMotionCommandRate(50);
@@ -412,7 +468,7 @@ python3 example/pose_tracking_example.py --robot-ip <ROBOT_IP> --state-rate 100
 // Request after connecting, with the robot already in Motion state.
 const bool sent = motion.setPoseTracking();
 // In a later state loop, wait for pose-tracking feedback before nonzero input.
-if (sent && motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::PoseTracking) {
+if (sent && motion.getCurrentGaitEnum() == mirrorme_robot_sdk::MotionGait::PoseTracking) {
     motion.setPose(0.1f, -0.1f, 0.0f, 0.0f);
 }
 ```
@@ -421,7 +477,7 @@ if (sent && motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::PoseTracking) {
 
 Header: `include/joint_level_control.h`
 
-Class: `bpx_sdk::JointLevelControl`
+Class: `mirrorme_robot_sdk::JointLevelControl`
 
 This layer sends joint control commands directly. It also inherits all state query APIs from `RequestRobotState`, so applications can send joint targets and read robot state in the same loop.
 
@@ -440,9 +496,9 @@ torque = kp * (target_position - current_position)
 Connection and setup:
 
 ```cpp
-bpx_sdk::JointLevelControl joint;
-joint.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-joint.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::JointLevelControl joint;
+joint.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+joint.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 joint.setTcpLocalPort(0);
 joint.setRobotStateUploadRate(100);
 
@@ -479,6 +535,39 @@ High-rate state APIs:
 
 `example/joint_level_control_example.cpp` demonstrates how to send joint commands and periodically print motion state, gait, battery level, IMU RPY, and high-rate position, velocity, and torque for the first six joints.
 
+## Naming and Migration to 2.0.0
+
+| Item | Name |
+| --- | --- |
+| Project | MirrorMe Robot SDK |
+| pip distribution | `mirrorme-robot-sdk` |
+| Python import / C++ namespace | `mirrorme_robot_sdk` |
+| Configuration / version headers | `mirrorme_robot_sdk_config.h` / `mirrorme_robot_sdk_version.h` |
+| Build and configuration prefix | `MIRRORME_ROBOT_SDK_*` |
+| Native library base name | `mirrorme_robot_sdk_<arch>` |
+
+The distribution name uses hyphens; the import package and wheel filename use
+underscores. Version 2.0.0 changes the former `bpx-sdk-open` distribution,
+`bpx_sdk` imports/namespace, and `BPX_SDK_*` build names. Update application
+imports, namespace references, configuration/version includes, and build flags;
+install `mirrorme-robot-sdk`, and recompile C++ applications against matching
+2.0.0 headers and libraries. The old C++ binary ABI is not preserved.
+The migration keeps existing network packet layouts, enum values, and endpoints.
+It does not add new model capabilities or a 16-joint control API.
+
+This distribution contains public headers, precompiled native C++ libraries,
+Python bindings, and examples. Its CMake project builds the examples; Python
+source installation compiles the binding against the supplied native library.
+The complete native implementation is maintained separately. Native libraries
+and wheels must be rebuilt for each platform under the new names before release;
+legacy BPX libraries and wheels are not renamed into 2.0.0 artifacts.
+
+For release preparation, first build the renamed native implementation on Linux,
+Windows, and macOS, then install its matching libraries/headers into this
+repository. Run this repository's wheel workflow only after those artifacts
+have been synchronized. A platform without its rebuilt native library cannot
+produce a new-name wheel.
+
 ## Requirements and Installation
 
 Requirements:
@@ -490,7 +579,7 @@ Requirements:
 
 Installation:
 
-Build the SDK examples inside the `bpx_sdk_open` directory:
+Build the SDK examples from the source worktree (for this bare/worktree layout, `mirrorme_robot_sdk/master`):
 
 ```bash
 mkdir build
@@ -499,7 +588,7 @@ cmake ..
 make
 ```
 
-On Windows, open the x64 Native Tools Command Prompt for VS, then build the examples from the `bpx_sdk_open` directory:
+On Windows, open the x64 Native Tools Command Prompt for VS, then build the examples from the `mirrorme_robot_sdk` directory:
 
 ```bat
 cmake -S . -B build\windows_x64_examples -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
@@ -521,7 +610,7 @@ respectively, or `None` when identity is unavailable. An empty string means the 
 sn = robot.getRobotSerialNumber()
 model = robot.getRobotModel()
 if sn is not None and model is not None:
-    print(sn, bpx_sdk.RobotModel(model).name)
+    print(sn, mirrorme_robot_sdk.RobotModel(model).name)
 ```
 
 Model values are `RobotModel.Unknown = 0`, `BPX = 1`, `BPXPro = 2`, and `BPW = 3`.
@@ -533,7 +622,7 @@ when feedback is unavailable or the connection is lost.
 ```python
 mode = robot.getControlMode()
 if mode is not None:
-    print(bpx_sdk.ControlMode(mode).name)
+    print(mirrorme_robot_sdk.ControlMode(mode).name)
 ```
 
 `ControlMode` values are `Unknown=0`, `RemoteControl=1`, and `Navigator=2`.
@@ -614,15 +703,15 @@ Install the updated Python package and ensure the robot firmware supports the fe
 
 ### Python Bindings
 
-The Python bindings are provided by the `bpx_sdk` package and link directly against the C++ shared library shipped in this repository. Install them with:
+The Python bindings are provided by the `mirrorme_robot_sdk` package and link directly against the C++ shared library shipped in this repository. Install them with:
 
 ```bash
 python3 -m pip install .
 ```
 
-The Windows Python bindings support x86_64 only. During the build, `lib/bpx_sdk_x86_64.lib` is used to link the native extension, and `bin/bpx_sdk_x86_64.dll` is installed into the Python package.
+The Windows Python bindings support x86_64 only. During the build, `lib/mirrorme_robot_sdk_x86_64.lib` is used to link the native extension, and `bin/mirrorme_robot_sdk_x86_64.dll` is installed into the Python package.
 
-On Linux, the Python build selects `lib/libbpx_sdk_<arch>.so` for the current machine architecture. On macOS, the Python build selects `lib/libbpx_sdk_<arch>.dylib`; the repository currently ships `lib/libbpx_sdk_aarch64.dylib` for Apple Silicon. You can override architecture detection with `BPX_SDK_ARCH=x86_64` or `BPX_SDK_ARCH=aarch64` when building.
+On Linux, the Python build selects `lib/libmirrorme_robot_sdk_<arch>.so` for the current machine architecture. On macOS, the Python build selects `lib/libmirrorme_robot_sdk_<arch>.dylib`; the repository currently ships `lib/libmirrorme_robot_sdk_aarch64.dylib` for Apple Silicon. You can override architecture detection with `MIRRORME_ROBOT_SDK_ARCH=x86_64` or `MIRRORME_ROBOT_SDK_ARCH=aarch64` when building.
 
 Installing from source with `python3 -m pip install .` compiles the native Python extension locally, so the build machine must have a C++17 compiler and Python development headers. Windows source builds require Microsoft C++ Build Tools. Users who install a prebuilt wheel do not need the compiler toolchain.
 
@@ -649,7 +738,7 @@ On Linux, the environment setup and release build can be run with one command:
 ```
 
 This command uses `uv` to create or reuse `.venv-cibw-linux` with Python 3.11 and
-`pip`, installs or upgrades `cibuildwheel<4`, and writes the wheels to
+`pip`, installs or upgrades `cibuildwheel>=4.3.1,<5`, and writes the wheels to
 `wheelhouse`. Pass a different output directory as the first argument if needed.
 
 On Windows, use the equivalent PowerShell script:
@@ -677,18 +766,20 @@ On local macOS machines, `cibuildwheel` only uses python.org CPython framework i
 The build script skips configured CPython versions that are not installed locally. In
 GitHub Actions, the full configured CPython matrix is built.
 
-The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheels in four parallel jobs: Windows AMD64, Linux x86_64, Linux aarch64, and macOS arm64. Linux uses native `ubuntu-22.04` and `ubuntu-22.04-arm` runners, one architecture per job, without QEMU emulation. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts and can be installed with:
+The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheels in four parallel jobs: Windows AMD64, Linux x86_64, Linux aarch64, and macOS arm64. Linux uses native `ubuntu-22.04` and `ubuntu-22.04-arm` runners, one architecture per job, without QEMU emulation. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts.
+
+To install from a local wheelhouse:
 
 ```bash
-pip3 install --no-index --find-links wheelhouse bpx-sdk-open
+pip3 install --no-index --find-links wheelhouse mirrorme-robot-sdk
 ```
 
 If pip is too old to recognize newer wheel platform tags, the install may fail with:
 
 ```text
 Looking in links: wheelhouse
-ERROR: Could not find a version that satisfies the requirement bpx-sdk-open (from versions: none)
-ERROR: No matching distribution found for bpx-sdk-open
+ERROR: Could not find a version that satisfies the requirement mirrorme-robot-sdk (from versions: none)
+ERROR: No matching distribution found for mirrorme-robot-sdk
 ```
 
 Upgrade pip and retry:
@@ -700,17 +791,17 @@ pip3 install --upgrade pip
 After installation, verify the package import with:
 
 ```bash
-python3 -c "import bpx_sdk; print('ok')"
+python3 -c "import mirrorme_robot_sdk; print('ok')"
 ```
 
 After installation, use the same three client types exposed by the C++ SDK:
 
 ```python
-import bpx_sdk
+import mirrorme_robot_sdk
 
-robot_state = bpx_sdk.RequestRobotState()
-robot_state.setRobotIp(bpx_sdk.DEFAULT_SERVER_IP)
-robot_state.setRobotStateUploadPort(bpx_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT)
+robot_state = mirrorme_robot_sdk.RequestRobotState()
+robot_state.setRobotIp(mirrorme_robot_sdk.DEFAULT_SERVER_IP)
+robot_state.setRobotStateUploadPort(mirrorme_robot_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT)
 robot_state.setTcpLocalPort(0)
 robot_state.setRobotStateUploadRate(100)
 
@@ -739,7 +830,7 @@ print("command sent:", sent)
 # Poll feedback during subsequent control-loop iterations.
 current = motion.getCurrentMotionState()
 previous = motion.getLastMotionState()
-if current == bpx_sdk.MotionState.ChargingSitDown:
+if current == mirrorme_robot_sdk.MotionState.ChargingSitDown:
     print("charging sit-down in progress")
 print("previous state:", previous)
 ```
@@ -753,7 +844,7 @@ robot is in `MotionState.LyingDown`:
 sent = motion.setTumbler()
 print("recovery request sent:", sent)
 # Poll feedback during subsequent control-loop iterations.
-if motion.getCurrentGait() == bpx_sdk.MotionGait.Tumbler:
+if motion.getCurrentGait() == mirrorme_robot_sdk.MotionGait.Tumbler:
     print("self-righting in progress")
 ```
 
@@ -761,10 +852,10 @@ Python method names match the C++ SDK. Read APIs return a
 `list`, `dict`, `int`, or `float` on success, and `None` when no valid data has been received yet. `getLegOdom()` returns a dict with `velocity_body`, `position`, `orientation`, and `angular_velocity` lists. Joint control APIs accept Python sequences with exactly 12 numbers:
 
 ```python
-joint = bpx_sdk.JointLevelControl()
-zeros = [0.0] * bpx_sdk.JOINT_COUNT
-kp = [100.0] * bpx_sdk.JOINT_COUNT
-kd = [2.0] * bpx_sdk.JOINT_COUNT
+joint = mirrorme_robot_sdk.JointLevelControl()
+zeros = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
+kp = [100.0] * mirrorme_robot_sdk.JOINT_COUNT
+kd = [2.0] * mirrorme_robot_sdk.JOINT_COUNT
 joint.setJointCommand(kp, zeros, kd, zeros, zeros)
 ```
 
@@ -815,7 +906,7 @@ robot is lying down; `status` reports `gait=11(Tumbler)` during recovery.
 
 ## License
 
-BPX SDK Open is licensed under the Apache License 2.0. The license covers the
-source code, headers, examples, Python bindings, precompiled BPX SDK libraries,
+MirrorMe Robot SDK is licensed under the Apache License 2.0. The license covers the
+source code, headers, examples, Python bindings, precompiled MirrorMe Robot SDK libraries,
 and wheels distributed in this repository. See [LICENSE](LICENSE),
 [NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -6,7 +6,7 @@ import struct
 import time
 import unittest
 
-import bpx_sdk
+import mirrorme_robot_sdk
 
 
 def peer(ready):
@@ -113,7 +113,7 @@ class RobotFeaturesTest(unittest.TestCase):
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
         sdk.setRobotStateUploadPort(port)
-        if isinstance(sdk, bpx_sdk.JointLevelControl):
+        if isinstance(sdk, mirrorme_robot_sdk.JointLevelControl):
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reservation:
                 reservation.bind(('127.0.0.1', 0))
                 sdk.setJointStateUploadPort(reservation.getsockname()[1])
@@ -130,38 +130,38 @@ class RobotFeaturesTest(unittest.TestCase):
         self.assertIsNone(self.channel.recv())
 
     def test_identity_on_all_three_classes(self):
-        for kind in (bpx_sdk.RequestRobotState, bpx_sdk.MotionLevelControl, bpx_sdk.JointLevelControl):
-            for wire, model, sn in [(0, bpx_sdk.RobotModel.BPX, 'original-SN'),
-                                    (1, bpx_sdk.RobotModel.BPXPro, 'S' * 32),
-                                    (2, bpx_sdk.RobotModel.Unknown, ''),
-                                    (3, bpx_sdk.RobotModel.BPW, 'BPW-SN'),
-                                    (255, bpx_sdk.RobotModel.Unknown, 'future-SN')]:
+        for kind in (mirrorme_robot_sdk.RequestRobotState, mirrorme_robot_sdk.MotionLevelControl, mirrorme_robot_sdk.JointLevelControl):
+            for wire, model, sn in [(0, mirrorme_robot_sdk.RobotModel.BPX, 'original-SN'),
+                                    (1, mirrorme_robot_sdk.RobotModel.BPXPro, 'S' * 32),
+                                    (2, mirrorme_robot_sdk.RobotModel.Unknown, ''),
+                                    (3, mirrorme_robot_sdk.RobotModel.BPW, 'BPW-SN'),
+                                    (255, mirrorme_robot_sdk.RobotModel.Unknown, 'future-SN')]:
                 with self.subTest(kind=kind.__name__, model=model, sn=sn):
                     self.configure_peer(wire, sn)
                     sdk, port = self.connect(kind)
                     self.assertEqual(sdk.getRobotSerialNumber(), sn)
-                    self.assertEqual(bpx_sdk.RobotModel(sdk.getRobotModel()), model)
+                    self.assertEqual(mirrorme_robot_sdk.RobotModel(sdk.getRobotModel()), model)
                     sdk.disconnect()
                     self.assertIsNone(sdk.getRobotSerialNumber())
                     self.assertIsNone(sdk.getRobotModel())
 
     def test_control_mode_on_all_three_classes(self):
-        for kind in (bpx_sdk.RequestRobotState, bpx_sdk.MotionLevelControl, bpx_sdk.JointLevelControl):
+        for kind in (mirrorme_robot_sdk.RequestRobotState, mirrorme_robot_sdk.MotionLevelControl, mirrorme_robot_sdk.JointLevelControl):
             with self.subTest(kind=kind.__name__):
                 self.configure_peer()
                 sdk, _ = self.connect(kind)
-                for wire, expected in [(0, bpx_sdk.ControlMode.RemoteControl),
-                                       (1, bpx_sdk.ControlMode.Navigator),
-                                       (255, bpx_sdk.ControlMode.Unknown), (None, None)]:
+                for wire, expected in [(0, mirrorme_robot_sdk.ControlMode.RemoteControl),
+                                       (1, mirrorme_robot_sdk.ControlMode.Navigator),
+                                       (255, mirrorme_robot_sdk.ControlMode.Unknown), (None, None)]:
                     self.configure_peer(control_mode=wire)
                     self.wait(lambda: sdk.getControlMode() == expected)
                     if expected is not None:
-                        self.assertEqual(bpx_sdk.ControlMode(sdk.getControlMode()), expected)
+                        self.assertEqual(mirrorme_robot_sdk.ControlMode(sdk.getControlMode()), expected)
                 sdk.disconnect()
                 self.assertIsNone(sdk.getControlMode())
 
     def test_charger_feedback_on_all_three_classes(self):
-        for kind in (bpx_sdk.RequestRobotState, bpx_sdk.MotionLevelControl, bpx_sdk.JointLevelControl):
+        for kind in (mirrorme_robot_sdk.RequestRobotState, mirrorme_robot_sdk.MotionLevelControl, mirrorme_robot_sdk.JointLevelControl):
             with self.subTest(kind=kind.__name__):
                 self.configure_peer()
                 sdk, port = self.connect(kind)
@@ -178,13 +178,13 @@ class RobotFeaturesTest(unittest.TestCase):
                 sdk.disconnect()
 
     def test_charging_sit_down_command_and_feedback(self):
-        motion = bpx_sdk.MotionLevelControl()
+        motion = mirrorme_robot_sdk.MotionLevelControl()
         self.assertIs(motion.setChargingSitDown(), False)
         self.configure_peer()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
             receiver.bind(('127.0.0.1', 9527))
             receiver.settimeout(2)
-            sdk, port = self.connect(bpx_sdk.MotionLevelControl)
+            sdk, port = self.connect(mirrorme_robot_sdk.MotionLevelControl)
             self.wait(lambda: sdk.setVelocity(0.3, 0.1, 0.2))
             self.assertIs(sdk.setChargingSitDown(), True)
             deadline = time.monotonic() + 3
@@ -205,20 +205,20 @@ class RobotFeaturesTest(unittest.TestCase):
                 self.wait(lambda: sdk.getMotionStateTimestamp() == timestamp)
                 self.assertEqual(sdk.getCurrentMotionState(), current)
                 self.assertEqual(sdk.getLastMotionState(), previous)
-                self.assertEqual(bpx_sdk.MotionState(24).name, 'ChargingSitDown')
+                self.assertEqual(mirrorme_robot_sdk.MotionState(24).name, 'ChargingSitDown')
             sdk.disconnect()
             self.assertIs(sdk.setChargingSitDown(), False)
 
     def test_pose_tracking_and_four_axis_input(self):
         axes = (0.2, -0.3, 1.0, -1.0)
         expected_axes = (0.2, -0.3, -1.0, 1.0, 0.0, 0.0)
-        disconnected = bpx_sdk.MotionLevelControl()
+        disconnected = mirrorme_robot_sdk.MotionLevelControl()
         self.assertIs(disconnected.setPoseTracking(), False)
         self.assertIs(disconnected.setPose(*axes), False)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
             receiver.bind(('127.0.0.1', 9527))
             receiver.settimeout(2)
-            sdk, _ = self.connect(bpx_sdk.MotionLevelControl)
+            sdk, _ = self.connect(mirrorme_robot_sdk.MotionLevelControl)
             sdk.setVelocityControlFlag(True)
             self.wait(lambda: sdk.setVelocity(0.3, 0.1, 0.2))
             self.assertIs(sdk.setPose(*axes), False)
@@ -264,12 +264,12 @@ class RobotFeaturesTest(unittest.TestCase):
             self.assertIs(sdk.setPoseTracking(), False)
 
     def test_tumbler_self_righting_request(self):
-        disconnected = bpx_sdk.MotionLevelControl()
+        disconnected = mirrorme_robot_sdk.MotionLevelControl()
         self.assertIs(disconnected.setTumbler(), False)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
             receiver.bind(('127.0.0.1', 9527))
             receiver.settimeout(2)
-            sdk, _ = self.connect(bpx_sdk.MotionLevelControl)
+            sdk, _ = self.connect(mirrorme_robot_sdk.MotionLevelControl)
             self.wait(lambda: sdk.setVelocity(0, 0, 0))
             self.assertIs(sdk.setTumbler(), True)
             deadline = time.monotonic() + 3
@@ -297,7 +297,7 @@ class RobotFeaturesTest(unittest.TestCase):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
             receiver.bind(('127.0.0.1', 9527))
             receiver.settimeout(2)
-            sdk, _ = self.connect(bpx_sdk.MotionLevelControl)
+            sdk, _ = self.connect(mirrorme_robot_sdk.MotionLevelControl)
             self.wait(lambda: sdk.setVelocity(0, 0, 0))
             previous_version = None
             for name, sub_gait in [('setUpJump', 0), ('setFrontJump', 1), ('setBackJump', 2),
@@ -318,12 +318,12 @@ class RobotFeaturesTest(unittest.TestCase):
             sdk.disconnect()
 
     def test_enum_values_and_argument_validation(self):
-        self.assertEqual([int(x) for x in bpx_sdk.RobotModel], [0, 1, 2, 3])
-        self.assertEqual([int(x) for x in bpx_sdk.ControlMode], [0, 1, 2])
-        self.assertEqual(bpx_sdk.MotionGait.Tumbler, 11)
-        self.assertEqual(bpx_sdk.MotionGait.Jump, 12)
-        self.assertEqual(bpx_sdk.MotionState.ChargingSitDown, 24)
-        sdk = bpx_sdk.MotionLevelControl()
+        self.assertEqual([int(x) for x in mirrorme_robot_sdk.RobotModel], [0, 1, 2, 3])
+        self.assertEqual([int(x) for x in mirrorme_robot_sdk.ControlMode], [0, 1, 2])
+        self.assertEqual(mirrorme_robot_sdk.MotionGait.Tumbler, 11)
+        self.assertEqual(mirrorme_robot_sdk.MotionGait.Jump, 12)
+        self.assertEqual(mirrorme_robot_sdk.MotionState.ChargingSitDown, 24)
+        sdk = mirrorme_robot_sdk.MotionLevelControl()
         self.assertFalse(hasattr(sdk, "setUpright"))
         for name in ('getRobotSerialNumber', 'getRobotModel', 'getControlMode', 'getChargerIn1', 'getChargerIn2', 'setUpJump', 'setFrontJump',
                      'setBackJump', 'setLeftJump', 'setRightJump', 'setChargingSitDown', 'setTumbler'):

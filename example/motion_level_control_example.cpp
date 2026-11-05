@@ -1,5 +1,5 @@
 #include "motion_level_control.h"
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "example_options.h"
 #include "example_feedback.h"
 
@@ -22,12 +22,12 @@ enum class DemoPhase {
 
 void printVersion() {
     std::cout
-        << BPX_SDK_PROJECT_NAME
-        << " version=" << BPX_SDK_PROJECT_VERSION
+        << MIRRORME_ROBOT_SDK_PROJECT_NAME
+        << " version=" << MIRRORME_ROBOT_SDK_PROJECT_VERSION
         << std::endl;
 }
 
-void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
+void printRobotVersion(const mirrorme_robot_sdk::RequestRobotState& robot_state) {
     uint16_t robot_major = 0;
     uint16_t robot_minor = 0;
     uint16_t robot_patch = 0;
@@ -51,8 +51,8 @@ void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    bpx_sdk::example::Options options;
-    if (!bpx_sdk::example::parseOptions(argc, argv, false, &options)) {
+    mirrorme_robot_sdk::example::Options options;
+    if (!mirrorme_robot_sdk::example::parseOptions(argc, argv, false, &options)) {
         return 1;
     }
     if (options.help_requested) {
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 
     printVersion();
 
-    bpx_sdk::MotionLevelControl motion_level_control;
+    mirrorme_robot_sdk::MotionLevelControl motion_level_control;
 
     // Set the target robot IP.
     motion_level_control.setRobotIp(options.robot_ip.c_str());
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(motion_level_control);
-    bpx_sdk::example::printIdentityAvailability(motion_level_control);
+    mirrorme_robot_sdk::example::printIdentityAvailability(motion_level_control);
 
     std::cout << "motion level control running" << std::endl;
     DemoPhase phase = DemoPhase::kWait;
@@ -109,14 +109,14 @@ int main(int argc, char** argv) {
         if (has_motion_state) {
             std::cout << "motion_state=" << static_cast<uint32_t>(current_state)
                       << " gait=" << static_cast<uint32_t>(current_gait)
-                      << " control_mode=" << bpx_sdk::example::formatControlMode(motion_level_control)
-                      << " " << bpx_sdk::example::formatPowerState(motion_level_control)
+                      << " control_mode=" << mirrorme_robot_sdk::example::formatControlMode(motion_level_control)
+                      << " " << mirrorme_robot_sdk::example::formatPowerState(motion_level_control)
                       << " max_vel=(" << max_vel[0] << ", "
                       << max_vel[1] << ", " << max_vel[2] << ")"
                       << std::endl;
         } else {
-            std::cout << "control_mode=" << bpx_sdk::example::formatControlMode(motion_level_control)
-                      << " " << bpx_sdk::example::formatPowerState(motion_level_control)
+            std::cout << "control_mode=" << mirrorme_robot_sdk::example::formatControlMode(motion_level_control)
+                      << " " << mirrorme_robot_sdk::example::formatPowerState(motion_level_control)
                       << std::endl;
         }
 

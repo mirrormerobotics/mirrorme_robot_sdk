@@ -5,13 +5,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import bpx_sdk
+import mirrorme_robot_sdk
 from example_options import parse_options
 from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
 
 def print_version():
-    print(f"bpx_sdk version={getattr(bpx_sdk, '__version__', 'unknown')}")
+    print(f"mirrorme_robot_sdk version={getattr(mirrorme_robot_sdk, '__version__', 'unknown')}")
 
 
 def print_robot_version(robot_state):
@@ -34,7 +34,7 @@ def main():
 
     print_version()
 
-    robot_state = bpx_sdk.RequestRobotState()
+    robot_state = mirrorme_robot_sdk.RequestRobotState()
     robot_state.setRobotIp(options.robot_ip)
     robot_state.setRobotStateUploadPort(options.robot_state_port)
     robot_state.setTcpLocalPort(options.tcp_local_port)

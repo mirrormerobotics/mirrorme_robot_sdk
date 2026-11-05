@@ -19,4 +19,4 @@ repair-wheel-command = ""
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
-environment = { BPX_SDK_ARCH = "aarch64", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+environment = { MIRRORME_ROBOT_SDK_ARCH = "aarch64", MACOSX_DEPLOYMENT_TARGET = "11.0" }

@@ -9,6 +9,22 @@
 
 ## [未发布]
 
+## [2.0.0] - 2026-11-04
+
+### 变更
+
+- 基于 BPX SDK 的完整历史准备 MirrorMe Robot SDK 2.0.0，统一服务内部开发和
+  对外集成，对外仓库为 `mirrormerobotics/mirrorme_robot_sdk`。
+- pip 分发包改名为 `mirrorme-robot-sdk`；Python 导入、C++ 命名空间、原生库、
+  头文件、构建选项及 CI 产物统一使用 `mirrorme_robot_sdk` / `MIRRORME_ROBOT_SDK_*`。
+  C++ 应用需重新编译；现有线上报文格式和枚举值保持一致。
+- 分发文档与示例的普通状态频率范围同步为原生实现支持的 1 至 1000 Hz；
+  旧固件仍受其自身上限限制。
+- 补充机型支持范围、固定 12 关节接口、源码/构建边界与旧包迁移说明；
+  移除旧预编译产物，新库和 wheel 由改名后的实现生成。
+- MSVC 示例和 Python 绑定显式使用 UTF-8 源码编码。
+- 更新默认构建仓库和 master 分支示例，同步中英文构建说明。
+
 ## [1.0.11] - 2026-10-13
 
 ### 新增
@@ -269,7 +285,7 @@
 - 首次提供用于机器人状态查询、运动级控制和关节级控制的 C++ SDK。
 - 首次提供 Linux x86_64 和 aarch64 共享库、CMake 配置及 C++ 示例。
 
-[未发布]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.11...HEAD
+[未发布]: https://github.com/mirrormerobotics/mirrorme_robot_sdk/compare/bca9363...HEAD
 [1.0.11]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...v1.0.9
@@ -277,3 +293,4 @@
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6
 [1.0.4]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.4
+[2.0.0]: https://github.com/mirrormerobotics/mirrorme_robot_sdk/compare/bca9363...HEAD

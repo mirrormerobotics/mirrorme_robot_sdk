@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import bpx_sdk
+import mirrorme_robot_sdk
 from example_options import parse_options
 from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
@@ -20,7 +20,7 @@ class DemoPhase(Enum):
 
 
 def print_version():
-    print(f"bpx_sdk version={getattr(bpx_sdk, '__version__', 'unknown')}")
+    print(f"mirrorme_robot_sdk version={getattr(mirrorme_robot_sdk, '__version__', 'unknown')}")
 
 
 def print_robot_version(motion_level_control):
@@ -43,7 +43,7 @@ def main():
 
     print_version()
 
-    motion_level_control = bpx_sdk.MotionLevelControl()
+    motion_level_control = mirrorme_robot_sdk.MotionLevelControl()
 
     # Set the target robot IP.
     motion_level_control.setRobotIp(options.robot_ip)
@@ -121,7 +121,7 @@ def main():
                 if not motion_level_control.setStandUp():
                     raise RuntimeError("failed to send stand-up command")
 
-                if has_motion_state and current_state == bpx_sdk.MotionState.Motion:
+                if has_motion_state and current_state == mirrorme_robot_sdk.MotionState.Motion:
                     phase = DemoPhase.YAW_VELOCITY
                     phase_start = now
                     phase_announced = False

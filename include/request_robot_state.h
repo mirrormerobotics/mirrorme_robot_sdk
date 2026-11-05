@@ -1,7 +1,7 @@
-#ifndef BPX_SDK_REQUEST_ROBOT_STATE_H_
-#define BPX_SDK_REQUEST_ROBOT_STATE_H_
+#ifndef MIRRORME_ROBOT_SDK_REQUEST_ROBOT_STATE_H_
+#define MIRRORME_ROBOT_SDK_REQUEST_ROBOT_STATE_H_
 
-#include "bpx_sdk_config.h"
+#include "mirrorme_robot_sdk_config.h"
 #include "fault_code.h"
 #include "motion_types.h"
 
@@ -11,7 +11,7 @@
 #include <optional>
 #include <string>
 
-namespace bpx_sdk {
+namespace mirrorme_robot_sdk {
 
 class RequestRobotState {
 public:
@@ -27,7 +27,7 @@ public:
     void setRobotStateUploadPort(uint16_t);
     virtual void setJointStateUploadPort(uint16_t);
     // Request the robot-to-SDK ordinary UDP state upload rate. Call before
-    // connect(); valid range is 1..200 Hz and the robot falls back to 100 Hz
+    // connect(); valid range is 1..1000 Hz and the robot falls back to 100 Hz
     // for invalid values. Per-state-group native rate caps still apply.
     void setRobotStateUploadRate(uint16_t rate_hz);
     void setTcpLocalPort(uint16_t port);
@@ -158,6 +158,6 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace bpx_sdk
+}  // namespace mirrorme_robot_sdk
 
-#endif  // BPX_SDK_REQUEST_ROBOT_STATE_H_
+#endif  // MIRRORME_ROBOT_SDK_REQUEST_ROBOT_STATE_H_

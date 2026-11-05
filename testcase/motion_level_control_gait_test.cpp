@@ -25,7 +25,7 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 
 struct Options {
     std::string robot_ip;
-    std::uint16_t state_port = bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT;
+    std::uint16_t state_port = mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT;
     std::uint16_t tcp_local_port = 0;
     float speed_mps = kDefaultSpeedMps;
     bool help_requested = false;
@@ -41,7 +41,7 @@ void printUsage(const char* program) {
         << "Real-robot options:\n"
         << "  --robot-ip IP          Robot IP address (required)\n"
         << "  --state-port PORT      Local robot-state UDP port (default: "
-        << bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT << ")\n"
+        << mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT << ")\n"
         << "  --tcp-local-port PORT  Local TCP port, 0 for automatic selection\n"
         << "  --speed MPS            Forward speed, range 0.2..1.0 (default: "
         << kDefaultSpeedMps << ")\n"
@@ -145,7 +145,7 @@ bool confirm(const std::string& prompt, const std::string& expected) {
     return std::getline(std::cin, input) && input == expected;
 }
 
-void printState(const bpx_sdk::MotionLevelControl& motion) {
+void printState(const mirrorme_robot_sdk::MotionLevelControl& motion) {
     std::uint8_t state = 0;
     std::uint8_t gait = 0;
     std::uint8_t sub_gait = 0;
@@ -174,7 +174,7 @@ void printState(const bpx_sdk::MotionLevelControl& motion) {
     std::cout << '\n';
 }
 
-void disableVelocityControl(bpx_sdk::MotionLevelControl& motion) {
+void disableVelocityControl(mirrorme_robot_sdk::MotionLevelControl& motion) {
     std::cout << "Setting velocity control flag to false.\n";
     motion.setVelocityControlFlag(false);
     // Give the periodic command sender time to transmit the updated flag.
@@ -183,7 +183,7 @@ void disableVelocityControl(bpx_sdk::MotionLevelControl& motion) {
 
 class SafeStopGuard {
 public:
-    explicit SafeStopGuard(bpx_sdk::MotionLevelControl& motion)
+    explicit SafeStopGuard(mirrorme_robot_sdk::MotionLevelControl& motion)
         : motion_(motion) {}
 
     ~SafeStopGuard() {
@@ -206,10 +206,10 @@ public:
     SafeStopGuard& operator=(const SafeStopGuard&) = delete;
 
 private:
-    bpx_sdk::MotionLevelControl& motion_;
+    mirrorme_robot_sdk::MotionLevelControl& motion_;
 };
 
-bool waitUntilStanding(bpx_sdk::MotionLevelControl& motion) {
+bool waitUntilStanding(mirrorme_robot_sdk::MotionLevelControl& motion) {
     std::cout << "Sending stand-up command; timeout="
               << kStandUpTimeout.count() << " seconds.\n";
     const auto deadline = std::chrono::steady_clock::now() + kStandUpTimeout;
@@ -218,7 +218,7 @@ bool waitUntilStanding(bpx_sdk::MotionLevelControl& motion) {
     while (!g_stop_requested && std::chrono::steady_clock::now() < deadline) {
         std::uint8_t state = 0;
         if (motion.getCurrentMotionState(&state) &&
-            state == static_cast<std::uint8_t>(bpx_sdk::MotionState::Motion)) {
+            state == static_cast<std::uint8_t>(mirrorme_robot_sdk::MotionState::Motion)) {
             printState(motion);
             return true;
         }
@@ -237,7 +237,7 @@ bool waitUntilStanding(bpx_sdk::MotionLevelControl& motion) {
     return false;
 }
 
-void stopAndSwitchToWalk(bpx_sdk::MotionLevelControl& motion) {
+void stopAndSwitchToWalk(mirrorme_robot_sdk::MotionLevelControl& motion) {
     std::cout << "Stopping: send zero velocity and switch back to Walk.\n";
     motion.setVelocity(0.0f, 0.0f, 0.0f);
     motion.setWalk();
@@ -245,7 +245,7 @@ void stopAndSwitchToWalk(bpx_sdk::MotionLevelControl& motion) {
     disableVelocityControl(motion);
 }
 
-bool runVelocityPhase(bpx_sdk::MotionLevelControl& motion,
+bool runVelocityPhase(mirrorme_robot_sdk::MotionLevelControl& motion,
                       const char* description,
                       float speed_mps,
                       std::chrono::seconds duration,
@@ -291,7 +291,7 @@ bool runVelocityPhase(bpx_sdk::MotionLevelControl& motion,
     return !g_stop_requested;
 }
 
-bool runMotionObservation(bpx_sdk::MotionLevelControl& motion,
+bool runMotionObservation(mirrorme_robot_sdk::MotionLevelControl& motion,
                           float speed_mps) {
     motion.setVelocityControlFlag(true);
 
@@ -381,7 +381,7 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    bpx_sdk::MotionLevelControl motion;
+    mirrorme_robot_sdk::MotionLevelControl motion;
     motion.setRobotIp(options.robot_ip.c_str());
     motion.setRobotStateUploadPort(options.state_port);
     motion.setTcpLocalPort(options.tcp_local_port);

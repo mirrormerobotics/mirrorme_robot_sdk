@@ -113,13 +113,13 @@ bool parseOptions(int argc, char** argv, ClientOptions* options) {
             return true;
         }
         if (arg == "--server-ip") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i)) return false;
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i)) return false;
             options->server_ip = argv[++i];
             continue;
         }
         if (arg == "--server-port") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i) ||
-                !bpx_sdk::example::parseUint16(argv[++i], &options->server_port) ||
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i) ||
+                !mirrorme_robot_sdk::example::parseUint16(argv[++i], &options->server_port) ||
                 options->server_port == 0) {
                 std::cerr << arg << " expects a positive port in range 1..65535" << std::endl;
                 return false;

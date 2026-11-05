@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-04
+
+### Changed
+
+- Prepare MirrorMe Robot SDK 2.0.0 from the complete BPX SDK history for shared
+  internal development and external integration through
+  `mirrormerobotics/mirrorme_robot_sdk`.
+- Rename the pip distribution to `mirrorme-robot-sdk`; rename Python imports,
+  C++ namespaces, native libraries, headers, build options, and CI artifacts to
+  `mirrorme_robot_sdk` / `MIRRORME_ROBOT_SDK_*`. C++ applications must be rebuilt;
+  existing wire formats and enum values remain unchanged.
+- Align the distribution's ordinary state-rate documentation and example options
+  with the native implementation's 1--1000 Hz range; older firmware limits apply.
+- Document per-model support, the fixed 12-joint interface, source/build scope,
+  and the migration from the legacy package. Remove legacy prebuilt artifacts;
+  generate new libraries and wheels from the renamed implementation.
+- Compile MSVC examples and Python bindings with UTF-8 source encoding.
+- Update the default build repository and master-branch examples, and synchronize
+  the English and Chinese build instructions.
+
 ## [1.0.11] - 2026-10-13
 
 ### Added
@@ -312,7 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Linux x86_64 and aarch64 shared libraries, CMake configuration, and
   C++ examples.
 
-[Unreleased]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.11...HEAD
+[Unreleased]: https://github.com/mirrormerobotics/mirrorme_robot_sdk/compare/bca9363...HEAD
 [1.0.11]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...v1.0.9
@@ -320,3 +340,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6
 [1.0.4]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.4
+[2.0.0]: https://github.com/mirrormerobotics/mirrorme_robot_sdk/compare/bca9363...HEAD

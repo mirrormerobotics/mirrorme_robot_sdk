@@ -1,4 +1,4 @@
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "example_options.h"
 #include "request_robot_state.h"
 
@@ -7,21 +7,21 @@
 #include <thread>
 
 int main(int argc, char** argv) {
-    bpx_sdk::example::Options options;
-    if (!bpx_sdk::example::parseOptions(argc, argv, false, &options)) {
+    mirrorme_robot_sdk::example::Options options;
+    if (!mirrorme_robot_sdk::example::parseOptions(argc, argv, false, &options)) {
         return 1;
     }
     if (options.help_requested) {
         return 0;
     }
 
-    bpx_sdk::RequestRobotState robot_state;
+    mirrorme_robot_sdk::RequestRobotState robot_state;
     robot_state.setRobotIp(options.robot_ip.c_str());
     robot_state.setRobotStateUploadPort(options.robot_state_port);
     robot_state.setTcpLocalPort(options.tcp_local_port);
     robot_state.setRobotStateUploadRate(options.state_rate_hz);
 
-    std::cout << BPX_SDK_PROJECT_NAME << " version=" << BPX_SDK_PROJECT_VERSION << '\n'
+    std::cout << MIRRORME_ROBOT_SDK_PROJECT_NAME << " version=" << MIRRORME_ROBOT_SDK_PROJECT_VERSION << '\n'
               << "TCP reconnect monitor: no motion or joint command will be sent.\n"
               << "robot_ip=" << options.robot_ip
               << " state_port=" << options.robot_state_port

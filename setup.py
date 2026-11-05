@@ -16,8 +16,8 @@ DEFAULT_MACOS_DEPLOYMENT_TARGET = "11.0"
 
 
 def read_sdk_version():
-    version_header = ROOT / "include" / "bpx_sdk_version.h"
-    pattern = re.compile(r'^\s*#\s*define\s+BPX_SDK_PROJECT_VERSION\s+"([^"]+)"\s*$')
+    version_header = ROOT / "include" / "mirrorme_robot_sdk_version.h"
+    pattern = re.compile(r'^\s*#\s*define\s+MIRRORME_ROBOT_SDK_PROJECT_VERSION\s+"([^"]+)"\s*$')
 
     try:
         lines = version_header.read_text(encoding="utf-8").splitlines()
@@ -29,11 +29,11 @@ def read_sdk_version():
         if match:
             return match.group(1)
 
-    raise RuntimeError(f"BPX_SDK_PROJECT_VERSION not found in {version_header}")
+    raise RuntimeError(f"MIRRORME_ROBOT_SDK_PROJECT_VERSION not found in {version_header}")
 
 
 def sdk_arch():
-    arch = os.environ.get("BPX_SDK_ARCH", platform.machine()).lower()
+    arch = os.environ.get("MIRRORME_ROBOT_SDK_ARCH", platform.machine()).lower()
     if arch in {"amd64", "x64", "x86_64"}:
         return "x86_64"
     if arch in {"arm64", "aarch64"}:
@@ -83,17 +83,17 @@ if IS_MACOS:
     )
 
 if IS_WINDOWS:
-    SDK_RUNTIME_LIBRARY = ROOT / "bin" / f"bpx_sdk_{ARCH}.dll"
-    SDK_IMPORT_LIBRARY = ROOT / "lib" / f"bpx_sdk_{ARCH}.lib"
+    SDK_RUNTIME_LIBRARY = ROOT / "bin" / f"mirrorme_robot_sdk_{ARCH}.dll"
+    SDK_IMPORT_LIBRARY = ROOT / "lib" / f"mirrorme_robot_sdk_{ARCH}.lib"
     if not SDK_RUNTIME_LIBRARY.exists():
-        raise RuntimeError(f"No BPX SDK runtime DLL found for architecture: {ARCH}")
+        raise RuntimeError(f"No MirrorMe Robot SDK runtime DLL found for architecture: {ARCH}")
     if not SDK_IMPORT_LIBRARY.exists():
-        raise RuntimeError(f"No BPX SDK import library found for architecture: {ARCH}")
+        raise RuntimeError(f"No MirrorMe Robot SDK import library found for architecture: {ARCH}")
 elif IS_MACOS:
-    SDK_RUNTIME_LIBRARY = ROOT / "lib" / f"libbpx_sdk_{ARCH}.dylib"
+    SDK_RUNTIME_LIBRARY = ROOT / "lib" / f"libmirrorme_robot_sdk_{ARCH}.dylib"
     SDK_IMPORT_LIBRARY = SDK_RUNTIME_LIBRARY
     if not SDK_RUNTIME_LIBRARY.exists():
-        raise RuntimeError(f"No BPX SDK dynamic library found for architecture: {ARCH}")
+        raise RuntimeError(f"No MirrorMe Robot SDK dynamic library found for architecture: {ARCH}")
     sdk_minos = macos_dylib_minos(SDK_RUNTIME_LIBRARY)
     if sdk_minos and macos_version_tuple(sdk_minos) > macos_version_tuple(
         os.environ["MACOSX_DEPLOYMENT_TARGET"]
@@ -104,10 +104,10 @@ elif IS_MACOS:
             "Rebuild or replace the SDK dylib with the same or lower deployment target."
         )
 else:
-    SDK_RUNTIME_LIBRARY = ROOT / "lib" / f"libbpx_sdk_{ARCH}.so"
+    SDK_RUNTIME_LIBRARY = ROOT / "lib" / f"libmirrorme_robot_sdk_{ARCH}.so"
     SDK_IMPORT_LIBRARY = SDK_RUNTIME_LIBRARY
     if not SDK_RUNTIME_LIBRARY.exists():
-        raise RuntimeError(f"No BPX SDK shared library found for architecture: {ARCH}")
+        raise RuntimeError(f"No MirrorMe Robot SDK shared library found for architecture: {ARCH}")
 
 
 def copy_sdk_library(target_package_dir):
@@ -135,7 +135,7 @@ def extra_link_args():
 class BuildPyWithSdkLibrary(build_py):
     def run(self):
         super().run()
-        package_dir = Path(self.build_lib) / "bpx_sdk"
+        package_dir = Path(self.build_lib) / "mirrorme_robot_sdk"
         copy_sdk_library(package_dir)
         remove_python_caches(package_dir)
 
@@ -150,22 +150,22 @@ class BuildExtWithSdkLibrary(build_ext):
 
 
 setup(
-    name="bpx-sdk-open",
+    name="mirrorme-robot-sdk",
     version=read_sdk_version(),
-    description="Python bindings for BPX SDK Open",
+    description="Python bindings for MirrorMe Robot SDK",
     license="Apache-2.0",
     license_files=("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"),
-    packages=["bpx_sdk"],
-    package_data={"bpx_sdk": ["lib/*.so", "lib/*.dylib", "lib/*.dll", "py.typed", "__init__.pyi"]},
+    packages=["mirrorme_robot_sdk"],
+    package_data={"mirrorme_robot_sdk": ["lib/*.so", "lib/*.dylib", "lib/*.dll", "py.typed", "__init__.pyi"]},
     ext_modules=[
         Extension(
-            "bpx_sdk._bpx_sdk",
-            sources=["python/bpx_sdk_py.cpp"],
+            "mirrorme_robot_sdk._mirrorme_robot_sdk",
+            sources=["python/mirrorme_robot_sdk_py.cpp"],
             include_dirs=["include"],
             library_dirs=["lib"],
-            libraries=[f"bpx_sdk_{ARCH}"],
+            libraries=[f"mirrorme_robot_sdk_{ARCH}"],
             language="c++",
-            extra_compile_args=["/std:c++17"] if IS_WINDOWS else ["-std=c++17"],
+            extra_compile_args=["/std:c++17", "/utf-8"] if IS_WINDOWS else ["-std=c++17"],
             extra_link_args=extra_link_args(),
             runtime_library_dirs=runtime_library_dirs(),
         )

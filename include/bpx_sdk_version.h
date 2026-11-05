@@ -1,8 +1,0 @@
-#pragma once
-
-#define BPX_SDK_PROJECT_NAME "bpx_sdk"
-#define BPX_SDK_PROJECT_VERSION "1.0.11"
-#define BPX_SDK_VERSION_MAJOR 1
-#define BPX_SDK_VERSION_MINOR 0
-#define BPX_SDK_VERSION_PATCH 11
-#define BPX_SDK_GIT_COMMIT_HASH "ae705d3"

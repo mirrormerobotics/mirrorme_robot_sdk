@@ -1,11 +1,11 @@
-#ifndef BPX_SDK_FAULT_CODE_H_
-#define BPX_SDK_FAULT_CODE_H_
+#ifndef MIRRORME_ROBOT_SDK_FAULT_CODE_H_
+#define MIRRORME_ROBOT_SDK_FAULT_CODE_H_
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace bpx_sdk {
+namespace mirrorme_robot_sdk {
 
 // 64 位故障码位域（与运动主机 FaultCodeManager、dog_fault.proto 一致）：
 //  63    60 59        40 39    36 35    32 31      24 23      16 15              0
@@ -78,6 +78,6 @@ struct RobotFaultState {
     std::array<RobotFaultEntry, kMaxFaultEntries> entries{};
 };
 
-}  // namespace bpx_sdk
+}  // namespace mirrorme_robot_sdk
 
-#endif  // BPX_SDK_FAULT_CODE_H_
+#endif  // MIRRORME_ROBOT_SDK_FAULT_CODE_H_

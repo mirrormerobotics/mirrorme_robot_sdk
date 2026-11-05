@@ -1,5 +1,5 @@
 #include "motion_level_control.h"
-#include "bpx_sdk_version.h"
+#include "mirrorme_robot_sdk_version.h"
 #include "example_options.h"
 #include "example_feedback.h"
 #include <cmath>
@@ -39,7 +39,7 @@ namespace {
 constexpr uint16_t kDefaultListenPort = 50051;
 
 struct ServerOptions {
-    bpx_sdk::example::Options sdk;
+    mirrorme_robot_sdk::example::Options sdk;
     std::string listen_ip = "127.0.0.1";
     uint16_t listen_port = kDefaultListenPort;
 };
@@ -72,12 +72,12 @@ void cleanupSockets() {
 
 void printVersion() {
     std::cout
-        << BPX_SDK_PROJECT_NAME
-        << " version=" << BPX_SDK_PROJECT_VERSION
+        << MIRRORME_ROBOT_SDK_PROJECT_NAME
+        << " version=" << MIRRORME_ROBOT_SDK_PROJECT_VERSION
         << std::endl;
 }
 
-void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
+void printRobotVersion(const mirrorme_robot_sdk::RequestRobotState& robot_state) {
     uint16_t robot_major = 0;
     uint16_t robot_minor = 0;
     uint16_t robot_patch = 0;
@@ -103,9 +103,9 @@ void printUsage(const char* program) {
         << "Usage: " << program << " [options]\n"
         << "\n"
         << "SDK options:\n"
-        << "  --robot-ip IP              Robot IP address (default: " << bpx_sdk::DEFAULT_SERVER_IP << ")\n"
+        << "  --robot-ip IP              Robot IP address (default: " << mirrorme_robot_sdk::DEFAULT_SERVER_IP << ")\n"
         << "  --state-port PORT          Local UDP port for robot state (default: "
-        << bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT << ")\n"
+        << mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT << ")\n"
         << "  --tcp-local-port PORT      Local TCP port, 0 for automatic selection (default: 0)\n"
         << "  --state-rate HZ            Requested robot state upload rate (default: 100)\n"
         << "\n"
@@ -133,29 +133,29 @@ bool parseOptions(int argc, char** argv, ServerOptions* options) {
             return true;
         }
         if (arg == "--robot-ip") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i)) return false;
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i)) return false;
             options->sdk.robot_ip = argv[++i];
             continue;
         }
         if (arg == "--state-port" || arg == "--robot-state-port") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i) ||
-                !bpx_sdk::example::parseUint16(argv[++i], &options->sdk.robot_state_port)) {
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i) ||
+                !mirrorme_robot_sdk::example::parseUint16(argv[++i], &options->sdk.robot_state_port)) {
                 std::cerr << arg << " expects a port in range 0..65535" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--tcp-local-port") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i) ||
-                !bpx_sdk::example::parseUint16(argv[++i], &options->sdk.tcp_local_port)) {
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i) ||
+                !mirrorme_robot_sdk::example::parseUint16(argv[++i], &options->sdk.tcp_local_port)) {
                 std::cerr << arg << " expects a port in range 0..65535" << std::endl;
                 return false;
             }
             continue;
         }
         if (arg == "--state-rate") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i) ||
-                !bpx_sdk::example::parseUint16(argv[++i], &options->sdk.state_rate_hz) ||
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i) ||
+                !mirrorme_robot_sdk::example::parseUint16(argv[++i], &options->sdk.state_rate_hz) ||
                 options->sdk.state_rate_hz == 0) {
                 std::cerr << arg << " expects a positive rate in range 1..65535" << std::endl;
                 return false;
@@ -163,13 +163,13 @@ bool parseOptions(int argc, char** argv, ServerOptions* options) {
             continue;
         }
         if (arg == "--listen-ip") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i)) return false;
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i)) return false;
             options->listen_ip = argv[++i];
             continue;
         }
         if (arg == "--listen-port") {
-            if (!bpx_sdk::example::requireValue(argc, argv, i) ||
-                !bpx_sdk::example::parseUint16(argv[++i], &options->listen_port) ||
+            if (!mirrorme_robot_sdk::example::requireValue(argc, argv, i) ||
+                !mirrorme_robot_sdk::example::parseUint16(argv[++i], &options->listen_port) ||
                 options->listen_port == 0) {
                 std::cerr << arg << " expects a positive port in range 1..65535" << std::endl;
                 return false;
@@ -297,61 +297,61 @@ SocketHandle createListenSocket(const std::string& listen_ip, uint16_t listen_po
 }
 
 const char* motionStateName(uint8_t state) {
-    switch (static_cast<bpx_sdk::MotionState>(state)) {
-        case bpx_sdk::MotionState::LyingDown:
+    switch (static_cast<mirrorme_robot_sdk::MotionState>(state)) {
+        case mirrorme_robot_sdk::MotionState::LyingDown:
             return "LyingDown";
-        case bpx_sdk::MotionState::StandingUp:
+        case mirrorme_robot_sdk::MotionState::StandingUp:
             return "StandingUp";
-        case bpx_sdk::MotionState::Passive:
+        case mirrorme_robot_sdk::MotionState::Passive:
             return "Passive";
-        case bpx_sdk::MotionState::SitDown:
+        case mirrorme_robot_sdk::MotionState::SitDown:
             return "SitDown";
-        case bpx_sdk::MotionState::ChargingSitDown:
+        case mirrorme_robot_sdk::MotionState::ChargingSitDown:
             return "ChargingSitDown";
-        case bpx_sdk::MotionState::Motion:
+        case mirrorme_robot_sdk::MotionState::Motion:
             return "Motion";
     }
     return "Unknown";
 }
 
 const char* motionGaitName(uint8_t gait) {
-    switch (static_cast<bpx_sdk::MotionGait>(gait)) {
-        case bpx_sdk::MotionGait::Jump:
+    switch (static_cast<mirrorme_robot_sdk::MotionGait>(gait)) {
+        case mirrorme_robot_sdk::MotionGait::Jump:
             return "Jump";
-        case bpx_sdk::MotionGait::Walk:
+        case mirrorme_robot_sdk::MotionGait::Walk:
             return "Walk";
-        case bpx_sdk::MotionGait::Bipedal:
+        case mirrorme_robot_sdk::MotionGait::Bipedal:
             return "Bipedal";
-        case bpx_sdk::MotionGait::Flip:
+        case mirrorme_robot_sdk::MotionGait::Flip:
             return "Flip";
-        case bpx_sdk::MotionGait::WalkPhase:
+        case mirrorme_robot_sdk::MotionGait::WalkPhase:
             return "WalkPhase";
-        case bpx_sdk::MotionGait::PoseTracking:
+        case mirrorme_robot_sdk::MotionGait::PoseTracking:
             return "PoseTracking";
-        case bpx_sdk::MotionGait::Running:
+        case mirrorme_robot_sdk::MotionGait::Running:
             return "Running";
-        case bpx_sdk::MotionGait::Tumbler:
+        case mirrorme_robot_sdk::MotionGait::Tumbler:
             return "Tumbler";
     }
     return "Unknown";
 }
 
-std::string statusLineUnlocked(bpx_sdk::MotionLevelControl& motion) {
+std::string statusLineUnlocked(mirrorme_robot_sdk::MotionLevelControl& motion) {
     const auto sn = motion.getRobotSerialNumberValue();
     const auto model = motion.getRobotModelValue();
     const char* model_name = "<unavailable>";
     if (model) {
         switch (*model) {
-            case bpx_sdk::RobotModel::BPX: model_name = "BPX"; break;
-            case bpx_sdk::RobotModel::BPXPro: model_name = "BPX-Pro"; break;
-            case bpx_sdk::RobotModel::BPW: model_name = "BPW"; break;
+            case mirrorme_robot_sdk::RobotModel::BPX: model_name = "BPX"; break;
+            case mirrorme_robot_sdk::RobotModel::BPXPro: model_name = "BPX-Pro"; break;
+            case mirrorme_robot_sdk::RobotModel::BPW: model_name = "BPW"; break;
             default: model_name = "Unknown"; break;
         }
     }
     std::ostringstream output;
     output << "OK connected=" << motion.isConnected()
            << " SN=" << (sn ? *sn : "<unavailable>") << " model=" << model_name
-           << " control_mode=" << bpx_sdk::example::formatControlMode(motion);
+           << " control_mode=" << mirrorme_robot_sdk::example::formatControlMode(motion);
     uint8_t state = 0, gait = 0;
     output << " motion_state=";
     if (motion.getCurrentMotionState(&state)) output << unsigned(state) << "(" << motionStateName(state) << ")";
@@ -366,11 +366,11 @@ std::string statusLineUnlocked(bpx_sdk::MotionLevelControl& motion) {
     output << " max_vel=";
     if (motion.getMaxVelocity(velocity)) output << "(" << velocity[0] << "," << velocity[1] << "," << velocity[2] << ")";
     else output << "<unavailable>";
-    output << " " << bpx_sdk::example::formatPowerState(motion);
+    output << " " << mirrorme_robot_sdk::example::formatPowerState(motion);
     return output.str();
 }
 
-void printTelemetryLoop(bpx_sdk::MotionLevelControl& motion,
+void printTelemetryLoop(mirrorme_robot_sdk::MotionLevelControl& motion,
                         std::mutex& sdk_mutex,
                         std::atomic<bool>& running) {
     while (running.load()) {
@@ -397,7 +397,7 @@ void printTelemetryLoop(bpx_sdk::MotionLevelControl& motion,
     }
 }
 
-bool executeCommand(bpx_sdk::MotionLevelControl& motion,
+bool executeCommand(mirrorme_robot_sdk::MotionLevelControl& motion,
                     const std::string& raw_line,
                     std::mutex& sdk_mutex,
                     std::string* response) {
@@ -527,7 +527,7 @@ bool executeCommand(bpx_sdk::MotionLevelControl& motion,
     return false;
 }
 
-bool serveClient(SocketHandle client, bpx_sdk::MotionLevelControl& motion, std::mutex& sdk_mutex) {
+bool serveClient(SocketHandle client, mirrorme_robot_sdk::MotionLevelControl& motion, std::mutex& sdk_mutex) {
     if (!sendAll(client, "OK motion-level server ready\n")) return false;
     std::string line;
     while (readLine(client, &line)) {
@@ -555,7 +555,7 @@ int main(int argc, char** argv) {
 
     printVersion();
 
-    bpx_sdk::MotionLevelControl motion;
+    mirrorme_robot_sdk::MotionLevelControl motion;
     motion.setRobotIp(options.sdk.robot_ip.c_str());
     motion.setRobotStateUploadPort(options.sdk.robot_state_port);
     motion.setTcpLocalPort(options.sdk.tcp_local_port);
@@ -573,7 +573,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     printRobotVersion(motion);
-    bpx_sdk::example::printIdentityAvailability(motion);
+    mirrorme_robot_sdk::example::printIdentityAvailability(motion);
     std::cout << "motion level control started" << std::endl;
 
     if (!initializeSockets()) {

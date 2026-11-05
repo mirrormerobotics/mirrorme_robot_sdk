@@ -1,7 +1,7 @@
-#ifndef BPX_SDK_EXAMPLE_OPTIONS_H_
-#define BPX_SDK_EXAMPLE_OPTIONS_H_
+#ifndef MIRRORME_ROBOT_SDK_EXAMPLE_OPTIONS_H_
+#define MIRRORME_ROBOT_SDK_EXAMPLE_OPTIONS_H_
 
-#include "bpx_sdk_config.h"
+#include "mirrorme_robot_sdk_config.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -9,7 +9,7 @@
 #include <limits>
 #include <string>
 
-namespace bpx_sdk {
+namespace mirrorme_robot_sdk {
 namespace example {
 
 struct Options {
@@ -30,7 +30,7 @@ inline void printUsage(const char* program, bool enable_joint_state_port) {
         << "  --state-port PORT          Local UDP port for robot state (default: "
         << DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT << ")\n"
         << "  --tcp-local-port PORT      Local TCP port, 0 for automatic selection (default: 0)\n"
-        << "  --state-rate HZ            Requested robot state upload rate, 1..200 (default: 100)\n";
+        << "  --state-rate HZ            Requested robot state upload rate, 1..1000 (default: 100)\n";
     if (enable_joint_state_port) {
         std::cout
             << "  --joint-state-port PORT    Local UDP port for high-rate joint state (default: "
@@ -99,8 +99,8 @@ inline bool parseOptions(int argc, char** argv, bool enable_joint_state_port, Op
         if (arg == "--state-rate") {
             if (!requireValue(argc, argv, i) ||
                 !parseUint16(argv[++i], &options->state_rate_hz) ||
-                options->state_rate_hz == 0 || options->state_rate_hz > 200) {
-                std::cerr << arg << " expects a rate in range 1..200" << std::endl;
+                options->state_rate_hz == 0 || options->state_rate_hz > 1000) {
+                std::cerr << arg << " expects a rate in range 1..1000" << std::endl;
                 return false;
             }
             continue;
@@ -123,6 +123,6 @@ inline bool parseOptions(int argc, char** argv, bool enable_joint_state_port, Op
 }
 
 }  // namespace example
-}  // namespace bpx_sdk
+}  // namespace mirrorme_robot_sdk
 
-#endif  // BPX_SDK_EXAMPLE_OPTIONS_H_
+#endif  // MIRRORME_ROBOT_SDK_EXAMPLE_OPTIONS_H_

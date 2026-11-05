@@ -1,5 +1,5 @@
-#ifndef BPX_SDK_EXAMPLE_FEEDBACK_H_
-#define BPX_SDK_EXAMPLE_FEEDBACK_H_
+#ifndef MIRRORME_ROBOT_SDK_EXAMPLE_FEEDBACK_H_
+#define MIRRORME_ROBOT_SDK_EXAMPLE_FEEDBACK_H_
 
 #include "request_robot_state.h"
 
@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-namespace bpx_sdk::example {
+namespace mirrorme_robot_sdk::example {
 
 inline void printIdentityAvailability(const RequestRobotState& robot) {
     const auto sn = robot.getRobotSerialNumberValue();
@@ -58,5 +58,5 @@ inline std::string formatPowerState(const RequestRobotState& robot) {
     return output.str();
 }
 
-}  // namespace bpx_sdk::example
+}  // namespace mirrorme_robot_sdk::example
 #endif

@@ -1,14 +1,14 @@
-# BPX SDK Open
+# MirrorMe Robot SDK
 
 [English](README.md) | **中文**
 
-`bpx_sdk_open` 提供一个轻量级 C++ SDK，用于读取 BPX 机器人状态，并发送运动级或关节级控制指令。
+MirrorMe Robot SDK 提供机器人状态查询、运动级控制和关节级控制的 C++ 与 Python 接口。
 
-SDK 版本：`1.0.11`
+SDK 版本：`2.0.0`
 
-文档更新日期：`2026-10-28`
+文档更新日期：`2026-11-05`
 
-SDK 提供三种使用模式：
+当前 BPX 实现提供三种使用模式：
 
 | 模式    | 说明                                       |
 | ----- | ---------------------------------------- |
@@ -18,6 +18,23 @@ SDK 提供三种使用模式：
 
 当前 SDK 接口和状态字段仍为初步实现，后续会逐步丰富可用接口和可读取的机器人状态。
 
+## 项目定位与机型支持
+
+MirrorMe Robot SDK 面向公司各机器人产品统一维护，服务于内部开发和对外开发者集成。
+对外分发仓库为 [mirrormerobotics/mirrorme_robot_sdk](https://github.com/mirrormerobotics/mirrorme_robot_sdk)。
+当前实现继承自 BPX SDK；统一 SDK 中的各项 API 仍需按机型确定支持范围。
+
+| 产品 | 身份识别 | 当前控制能力范围 |
+| --- | --- | --- |
+| BPX（C2） | 支持机型和整机 SN 查询 | 现有运控接口及 12 关节接口；具体动作仍有机型限制。 |
+| BPX-Pro（C2） | 支持机型和整机 SN 查询 | 现有适用运控接口及 12 关节接口；不支持双足正立和倒立。 |
+| BPW（A2） | 已有机型枚举及身份响应解码 | 此仓库尚未确立完整状态/控制适配。现有 12 关节 API 不能代表 BPW 的 16 个关节（含 4 个轮式关节）。 |
+| BAOBAO（C1）及其他产品 | 此分发包尚无专用适配 | 机型适配与验证属于后续工作。 |
+
+下文的网络默认值、运动状态、步态、速度限制、状态频率和机器人授时行为，适用于当前
+BPX 系列协议及实现对应功能的固件，并非所有产品的统一默认值。使用各项 API 前需确认
+目标机型与固件支持情况。
+
 ## 使用须知
 
 使用前请确认 SDK 与机器人固件版本匹配。
@@ -25,22 +42,22 @@ SDK 提供三种使用模式：
 ## 目录结构
 
 ```text
-bpx_sdk_open/
+mirrorme_robot_sdk/
   CMakeLists.txt
   include/
-    bpx_sdk_config.h
-    bpx_sdk_version.h
+    mirrorme_robot_sdk_config.h
+    mirrorme_robot_sdk_version.h
     motion_types.h
     request_robot_state.h
     motion_level_control.h
     joint_level_control.h
   lib/
-    libbpx_sdk_x86_64.so
-    libbpx_sdk_aarch64.so
-    libbpx_sdk_aarch64.dylib
-    bpx_sdk_x86_64.lib
+    libmirrorme_robot_sdk_x86_64.so
+    libmirrorme_robot_sdk_aarch64.so
+    libmirrorme_robot_sdk_aarch64.dylib
+    mirrorme_robot_sdk_x86_64.lib
   bin/
-    bpx_sdk_x86_64.dll
+    mirrorme_robot_sdk_x86_64.dll
   example/
     request_robot_state_example.cpp
     request_robot_state_example.py
@@ -56,7 +73,7 @@ bpx_sdk_open/
 
 ## 通用配置
 
-公开配置定义在 `include/bpx_sdk_config.h` 中。
+公开配置定义在 `include/mirrorme_robot_sdk_config.h` 中。
 
 | 名称                                    | 含义                   |
 | ------------------------------------- | -------------------- |
@@ -67,7 +84,7 @@ bpx_sdk_open/
 指令目标端口由机器人端固定，SDK 不将其作为公开配置暴露。
 
 SDK 默认机器人 IP 为 `10.21.20.1`（对应 RJ45 网口直连）。如需修改默认 IP，可以直接修改
-`include/bpx_sdk_config.h` 中的配置，也可以在程序中调用 `setRobotIp` 接口设置目标机器人 IP。不同网络连接方式下应使用的 IP 见下文「网络连接与 IP」。
+`include/mirrorme_robot_sdk_config.h` 中的配置，也可以在程序中调用 `setRobotIp` 接口设置目标机器人 IP。不同网络连接方式下应使用的 IP 见下文「网络连接与 IP」。
 
 ## 网络连接与 IP
 
@@ -86,7 +103,7 @@ SDK 通过以太网或 WiFi 与 BPX 通信。请根据实际连接方式选择�
 
 SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上一次运动状态和步态。
 
-运动状态 `bpx_sdk::MotionState`：
+运动状态 `mirrorme_robot_sdk::MotionState`：
 
 | 枚举值          | 原始值 | 说明    |
 | ------------ | --- | ----- |
@@ -97,7 +114,7 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `Motion`     | `6` | 运动状态。 |
 | `ChargingSitDown` | `24` | 充电坐下动作执行中。 |
 
-步态 `bpx_sdk::MotionGait`：
+步态 `mirrorme_robot_sdk::MotionGait`：
 
 | 枚举值            | 原始值 |
 | -------------- | --- |
@@ -144,7 +161,7 @@ if (robot_state.getSubGait(&raw_sub_gait)) {
 }
 ```
 
-腿部里程计 `bpx_sdk::LegOdom`：
+腿部里程计 `mirrorme_robot_sdk::LegOdom`：
 
 | 字段                 | 长度  | 说明                         |
 | ------------------ | --- | -------------------------- |
@@ -201,7 +218,7 @@ sqrt(vx² + vy² + yaw²) < 0.2
 
 头文件：`include/request_robot_state.h`
 
-类：`bpx_sdk::RequestRobotState`
+类：`mirrorme_robot_sdk::RequestRobotState`
 
 该层订阅机器人状态数据，并提供只读状态查询接口。当程序只需要遥测数据、不需要发送控制指令时使用该层。
 
@@ -210,9 +227,9 @@ sqrt(vx² + vy² + yaw²) < 0.2
 连接与设置：
 
 ```cpp
-bpx_sdk::RequestRobotState robot_state;
-robot_state.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-robot_state.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::RequestRobotState robot_state;
+robot_state.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+robot_state.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 robot_state.setTcpLocalPort(0);
 robot_state.setRobotStateUploadRate(100);
 
@@ -221,7 +238,7 @@ if (!robot_state.connect()) {
 }
 ```
 
-`setRobotStateUploadRate()` 设置机器人端向 SDK 客户端发送普通 UDP 状态的请求频率上限，不是 SDK 向机器人发送运动指令的频率。请在 `connect()` 前调用；合法范围为 1--200 Hz，默认 100 Hz，非法值由机器人端回退为 100 Hz。连接期间修改只在断开并重新连接后生效。
+`setRobotStateUploadRate()` 设置机器人端向 SDK 客户端发送普通 UDP 状态的请求频率上限，不是 SDK 向机器人发送运动指令的频率。请在 `connect()` 前调用；合法范围为 1--1000 Hz，默认 100 Hz，非法值由机器人端回退为 100 Hz。连接期间修改只在断开并重新连接后生效。
 
 `connect()` 表示启动“期望连接”：机器人暂时不可达时 SDK 会以100 ms至2 s的有界退避在后台自动重连，实时 TCP 状态请用 `isConnected()` 判断。只有收到机器人首个完整订阅响应才会报告已连接；即使断 Wi-Fi、断电或整机硬重启没有产生 TCP FIN/RST，持续收不到响应也会在有界时间内主动废弃半开连接并进入重连。显式 `disconnect()`、对象析构或进程退出会停止重试。每次真实连接及后台重连成功后，SDK 都会在当前 TCP 会话自动发起一次授时；重连仍不会恢复断线前的非零运动或关节目标。
 
@@ -331,16 +348,16 @@ robot identity: SN=BPX-example-SN, model=BPX-Pro
 
 头文件：`include/motion_level_control.h`
 
-类：`bpx_sdk::MotionLevelControl`
+类：`mirrorme_robot_sdk::MotionLevelControl`
 
 该层用于发送高层机器人控制指令。它继承自 `RequestRobotState`，因此同一个对象既可以发送运动指令，也可以读取机器人状态。
 
 连接与设置：
 
 ```cpp
-bpx_sdk::MotionLevelControl motion;
-motion.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-motion.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::MotionLevelControl motion;
+motion.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+motion.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 motion.setTcpLocalPort(0);
 motion.setRobotStateUploadRate(100);
 motion.setMotionCommandRate(50);
@@ -434,7 +451,7 @@ python3 example/pose_tracking_example.py --robot-ip <机器人IP> --state-rate 1
 // 在连接就绪、机器人处于 Motion 状态后请求。
 const bool sent = motion.setPoseTracking();
 // 在后续状态循环确认进入原地模式，再发送姿态。
-if (sent && motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::PoseTracking) {
+if (sent && motion.getCurrentGaitEnum() == mirrorme_robot_sdk::MotionGait::PoseTracking) {
     motion.setPose(0.1f, -0.1f, 0.0f, 0.0f);
 }
 ```
@@ -443,7 +460,7 @@ if (sent && motion.getCurrentGaitEnum() == bpx_sdk::MotionGait::PoseTracking) {
 
 头文件：`include/joint_level_control.h`
 
-类：`bpx_sdk::JointLevelControl`
+类：`mirrorme_robot_sdk::JointLevelControl`
 
 该层用于直接发送关节控制指令。它同样继承 `RequestRobotState` 的全部状态查询接口，因此应用程序可以在同一个循环中发送关节目标并读取机器人状态。
 
@@ -462,9 +479,9 @@ torque = kp * (target_position - current_position)
 连接与设置：
 
 ```cpp
-bpx_sdk::JointLevelControl joint;
-joint.setRobotIp(bpx_sdk::DEFAULT_SERVER_IP);
-joint.setRobotStateUploadPort(bpx_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
+mirrorme_robot_sdk::JointLevelControl joint;
+joint.setRobotIp(mirrorme_robot_sdk::DEFAULT_SERVER_IP);
+joint.setRobotStateUploadPort(mirrorme_robot_sdk::DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT);
 joint.setTcpLocalPort(0);
 joint.setRobotStateUploadRate(100);
 
@@ -501,6 +518,31 @@ if (!joint.connect()) {
 
 `example/joint_level_control_example.cpp` 演示了如何发送关节指令，并周期性打印运动状态、步态、电池电量、IMU RPY，以及前六个关节的高频位置、速度和力矩。
 
+## 命名与 2.0.0 迁移
+
+| 项目 | 名称 |
+| --- | --- |
+| 项目名称 | MirrorMe Robot SDK |
+| pip 分发包名 | `mirrorme-robot-sdk` |
+| Python 导入包 / C++ 命名空间 | `mirrorme_robot_sdk` |
+| 配置 / 版本头文件 | `mirrorme_robot_sdk_config.h` / `mirrorme_robot_sdk_version.h` |
+| 构建及配置前缀 | `MIRRORME_ROBOT_SDK_*` |
+| 原生库基础名称 | `mirrorme_robot_sdk_<arch>` |
+
+分发包名使用连字符，导入包和 wheel 文件名使用下划线。2.0.0 调整了原先的
+`bpx-sdk-open` 分发名、`bpx_sdk` 导入名/命名空间和 `BPX_SDK_*` 构建名称。
+应用需要更新导入、命名空间引用、配置/版本头文件及构建参数，安装 `mirrorme-robot-sdk`，
+并使用匹配的 2.0.0 头文件与动态库重新编译 C++ 程序。本次迁移不保留旧 C++ 二进制 ABI。
+现有网络报文布局、枚举值和通信端点保持一致；此次迁移未新增其他机型能力或 16 关节控制 API。
+
+本分发仓库包含公共头文件、预编译 C++ 原生库、Python 绑定和示例。CMake 工程构建示例，
+Python 源码安装编译绑定并链接随包原生库；完整原生实现单独维护。发布前需要为各平台
+重新构建新名称的原生库与 wheel，旧 BPX 库和 wheel 不直接改名为 2.0.0 产物。
+
+发布准备顺序：先在 Linux、Windows 和 macOS 构建改名后的原生实现，将匹配的库和
+头文件同步到本仓库，再运行本仓库的 wheel 工作流。缺少重建原生库的平台不能生成
+新名称的 wheel。
+
 ## 环境要求与安装步骤
 
 环境要求：
@@ -512,7 +554,7 @@ if (!joint.connect()) {
 
 安装步骤：
 
-在 `bpx_sdk_open` 目录内编译 SDK 示例：
+在源码 worktree 内编译 SDK 示例（本机 bare/worktree 布局下为 `mirrorme_robot_sdk/master`）：
 
 ```bash
 mkdir build
@@ -521,7 +563,7 @@ cmake ..
 make
 ```
 
-Windows 下可以打开 x64 Native Tools Command Prompt for VS，并在 `bpx_sdk_open` 目录内执行：
+Windows 下可以打开 x64 Native Tools Command Prompt for VS，并在 `mirrorme_robot_sdk` 目录内执行：
 
 ```bat
 cmake -S . -B build\windows_x64_examples -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
@@ -543,7 +585,7 @@ CMake 会根据当前系统架构自动链接对应的动态库。如有其他�
 sn = robot.getRobotSerialNumber()
 model = robot.getRobotModel()
 if sn is not None and model is not None:
-    print(sn, bpx_sdk.RobotModel(model).name)
+    print(sn, mirrorme_robot_sdk.RobotModel(model).name)
 ```
 
 机型枚举为 `RobotModel.Unknown = 0`、`BPX = 1`、`BPXPro = 2`、`BPW = 3`。
@@ -554,7 +596,7 @@ if sn is not None and model is not None:
 ```python
 mode = robot.getControlMode()
 if mode is not None:
-    print(bpx_sdk.ControlMode(mode).name)
+    print(mirrorme_robot_sdk.ControlMode(mode).name)
 ```
 
 `ControlMode` 取值为 `Unknown=0`、`RemoteControl=1`、`Navigator=2`。
@@ -629,19 +671,19 @@ IMU `0x0002/0x0003`；电池 `0x0001/0x0002/0x0003/0x0005/0x0006`。
 
 ### Python 调用库
 
-Python 封装位于 `bpx_sdk` 包中，直接链接当前项目自带的 C++ 动态库。安装：
+Python 封装位于 `mirrorme_robot_sdk` 包中，直接链接当前项目自带的 C++ 动态库。安装：
 
 ```bash
 python3 -m pip install .
 ```
 
-Windows Python 封装只支持 x86_64。构建时会使用 `lib/bpx_sdk_x86_64.lib` 链接原生扩展，并将
-`bin/bpx_sdk_x86_64.dll` 安装到 Python 包内。
+Windows Python 封装只支持 x86_64。构建时会使用 `lib/mirrorme_robot_sdk_x86_64.lib` 链接原生扩展，并将
+`bin/mirrorme_robot_sdk_x86_64.dll` 安装到 Python 包内。
 
-Linux 下 Python 构建会根据当前机器架构选择 `lib/libbpx_sdk_<arch>.so`。macOS 下 Python 构建会选择
-`lib/libbpx_sdk_<arch>.dylib`；当前仓库随包提供的是面向 Apple Silicon 的
-`lib/libbpx_sdk_aarch64.dylib`。如需覆盖自动架构检测，可在构建时设置
-`BPX_SDK_ARCH=x86_64` 或 `BPX_SDK_ARCH=aarch64`。
+Linux 下 Python 构建会根据当前机器架构选择 `lib/libmirrorme_robot_sdk_<arch>.so`。macOS 下 Python 构建会选择
+`lib/libmirrorme_robot_sdk_<arch>.dylib`；当前仓库随包提供的是面向 Apple Silicon 的
+`lib/libmirrorme_robot_sdk_aarch64.dylib`。如需覆盖自动架构检测，可在构建时设置
+`MIRRORME_ROBOT_SDK_ARCH=x86_64` 或 `MIRRORME_ROBOT_SDK_ARCH=aarch64`。
 
 使用 `python3 -m pip install .` 从源码安装时，会在本机编译 Python 原生扩展，因此构建机器需要 C++17 编译器和 Python 开发头文件。Windows 源码构建需要安装 Microsoft C++ Build Tools。使用预构建 wheel 安装的用户不需要安装这些编译工具。
 
@@ -668,7 +710,7 @@ python3.11 scripts/build_wheels.py --cibuildwheel --out-dir wheelhouse
 ```
 
 该命令会使用 `uv` 创建或复用基于 Python 3.11 且包含 `pip` 的
-`.venv-cibw-linux`，安装或升级 `cibuildwheel<4`，并将 wheel 输出到
+`.venv-cibw-linux`，安装或升级 `cibuildwheel>=4.3.1,<5`，并将 wheel 输出到
 `wheelhouse`。如需更改输出目录，可将目录路径作为第一个参数传入。
 
 在 Windows 上，可使用对应的 PowerShell 脚本：
@@ -694,18 +736,20 @@ wheel 输出到 `wheelhouse`。如需更改输出目录，可将目录路径作�
 在本地 macOS 上，`cibuildwheel` 只会使用 python.org 安装包提供的 CPython
 Framework。构建脚本会自动跳过本机未安装的 CPython 版本；GitHub Actions 中仍会构建完整配置矩阵。
 
-`.github/workflows/build-wheels.yml` 中的 GitHub Actions 工作流通过四个并行任务构建 Windows AMD64、Linux x86_64、Linux aarch64 和 macOS arm64 的 wheel 产物。Linux 分别使用原生 `ubuntu-22.04` 和 `ubuntu-22.04-arm` runner，每个任务只构建对应架构，无需 QEMU 模拟。可以在 Actions 页面手动触发，也可以推送 `v*` 标签触发。生成的 wheel 会作为工作流产物上传，安装方式如下：
+`.github/workflows/build-wheels.yml` 中的 GitHub Actions 工作流通过四个并行任务构建 Windows AMD64、Linux x86_64、Linux aarch64 和 macOS arm64 的 wheel 产物。Linux 分别使用原生 `ubuntu-22.04` 和 `ubuntu-22.04-arm` runner，每个任务只构建对应架构，无需 QEMU 模拟。可以在 Actions 页面手动触发，也可以推送 `v*` 标签触发。生成的 wheel 会作为工作流产物上传。
+
+从本地 wheelhouse 安装：
 
 ```bash
-pip3 install --no-index --find-links wheelhouse bpx-sdk-open
+pip3 install --no-index --find-links wheelhouse mirrorme-robot-sdk
 ```
 
 如果 pip 版本过旧，无法识别较新的 wheel 平台标签，安装时可能出现下面的报错：
 
 ```text
 Looking in links: wheelhouse
-ERROR: Could not find a version that satisfies the requirement bpx-sdk-open (from versions: none)
-ERROR: No matching distribution found for bpx-sdk-open
+ERROR: Could not find a version that satisfies the requirement mirrorme-robot-sdk (from versions: none)
+ERROR: No matching distribution found for mirrorme-robot-sdk
 ```
 
 遇到这个报错时，先升级 pip，然后重新执行安装命令：
@@ -717,17 +761,17 @@ pip3 install --upgrade pip
 安装完成后，可以用下面的命令验证导入：
 
 ```bash
-python3 -c "import bpx_sdk; print('ok')"
+python3 -c "import mirrorme_robot_sdk; print('ok')"
 ```
 
 安装完成后可在 Python 中使用和 C++ SDK 对应的三类对象：
 
 ```python
-import bpx_sdk
+import mirrorme_robot_sdk
 
-robot_state = bpx_sdk.RequestRobotState()
-robot_state.setRobotIp(bpx_sdk.DEFAULT_SERVER_IP)
-robot_state.setRobotStateUploadPort(bpx_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT)
+robot_state = mirrorme_robot_sdk.RequestRobotState()
+robot_state.setRobotIp(mirrorme_robot_sdk.DEFAULT_SERVER_IP)
+robot_state.setRobotStateUploadPort(mirrorme_robot_sdk.DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT)
 robot_state.setTcpLocalPort(0)
 robot_state.setRobotStateUploadRate(100)
 
@@ -749,7 +793,7 @@ print("command sent:", sent)
 # Poll feedback during subsequent control-loop iterations.
 current = motion.getCurrentMotionState()
 previous = motion.getLastMotionState()
-if current == bpx_sdk.MotionState.ChargingSitDown:
+if current == mirrorme_robot_sdk.MotionState.ChargingSitDown:
     print("charging sit-down in progress")
 print("previous state:", previous)
 ```
@@ -763,7 +807,7 @@ Python 1.0.11 新增 `MotionLevelControl.setTumbler() -> bool` 和
 sent = motion.setTumbler()
 print("recovery request sent:", sent)
 # 在后续控制循环中轮询反馈。
-if motion.getCurrentGait() == bpx_sdk.MotionGait.Tumbler:
+if motion.getCurrentGait() == mirrorme_robot_sdk.MotionGait.Tumbler:
     print("self-righting in progress")
 ```
 
@@ -771,10 +815,10 @@ Python 方法名与 C++ SDK 保持一致。读取类接口成功时返回
 `list`、`dict`、`int` 或 `float`，暂未收到有效数据时返回 `None`。`getLegOdom()` 返回包含 `velocity_body`、`position`、`orientation`、`angular_velocity` 四个列表字段的 dict。关节控制接口接收长度为 12 的 Python 序列，例如：
 
 ```python
-joint = bpx_sdk.JointLevelControl()
-zeros = [0.0] * bpx_sdk.JOINT_COUNT
-kp = [100.0] * bpx_sdk.JOINT_COUNT
-kd = [2.0] * bpx_sdk.JOINT_COUNT
+joint = mirrorme_robot_sdk.JointLevelControl()
+zeros = [0.0] * mirrorme_robot_sdk.JOINT_COUNT
+kp = [100.0] * mirrorme_robot_sdk.JOINT_COUNT
+kd = [2.0] * mirrorme_robot_sdk.JOINT_COUNT
 joint.setJointCommand(kp, zeros, kd, zeros, zeros)
 ```
 
@@ -823,6 +867,6 @@ python3 example/motion_level_control_client_example.py status
 
 ## 许可证
 
-BPX SDK Open 使用 Apache License 2.0。该许可证覆盖本仓库发布的源码、头文件、
-示例、Python 绑定、预编译 BPX SDK 原生库和 wheel。详情见 [LICENSE](LICENSE)、
+MirrorMe Robot SDK 使用 Apache License 2.0。该许可证覆盖本仓库发布的源码、头文件、
+示例、Python 绑定、预编译 MirrorMe Robot SDK 原生库和 wheel。详情见 [LICENSE](LICENSE)、
 [NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
