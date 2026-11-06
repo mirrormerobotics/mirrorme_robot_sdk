@@ -8,6 +8,9 @@
 
 namespace mirrorme_robot_sdk {
 
+// The 12-joint control session and all class-specific APIs are unsupported
+// on BPW. connect() returns false after identifying BPW, without subscribing
+// to joint control or starting the high-rate joint UDP session.
 class JointLevelControl : public RequestRobotState {
 public:
     JointLevelControl();
@@ -42,6 +45,7 @@ public:
 private:
     uint8_t hostServerMode() const override;
     void onStateConnectionChanged(bool connected) override;
+    bool prepareStateConnection() override;
 
     class Impl;
     std::unique_ptr<Impl> impl_;

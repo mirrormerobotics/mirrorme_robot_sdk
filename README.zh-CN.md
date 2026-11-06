@@ -6,7 +6,7 @@ MirrorMe Robot SDK 提供机器人状态查询、运动级控制和关节级控�
 
 SDK 版本：`2.0.0`
 
-文档更新日期：`2026-11-05`
+文档更新日期：`2026-11-06`
 
 当前 BPX 实现提供三种使用模式：
 
@@ -21,15 +21,13 @@ SDK 版本：`2.0.0`
 ## 项目定位与机型支持
 
 MirrorMe Robot SDK 面向公司各机器人产品统一维护，服务于内部开发和对外开发者集成。
-对外分发仓库为 [mirrormerobotics/mirrorme_robot_sdk](https://github.com/mirrormerobotics/mirrorme_robot_sdk)。
 当前实现继承自 BPX SDK；统一 SDK 中的各项 API 仍需按机型确定支持范围。
 
 | 产品 | 身份识别 | 当前控制能力范围 |
 | --- | --- | --- |
 | BPX（C2） | 支持机型和整机 SN 查询 | 现有运控接口及 12 关节接口；具体动作仍有机型限制。 |
 | BPX-Pro（C2） | 支持机型和整机 SN 查询 | 现有适用运控接口及 12 关节接口；不支持双足正立和倒立。 |
-| BPW（A2） | 已有机型枚举及身份响应解码 | 此仓库尚未确立完整状态/控制适配。现有 12 关节 API 不能代表 BPW 的 16 个关节（含 4 个轮式关节）。 |
-| BAOBAO（C1）及其他产品 | 此分发包尚无专用适配 | 机型适配与验证属于后续工作。 |
+| BPW（A2） | 机型与整机 SN 查询 | 基础状态、动态 N 轴关节/温度反馈及运动控制：站立、坐下、阻尼、速度、平地（`Walk=0`）和越障（`Rough=16`）；暂不支持关节层。 |
 
 下文的网络默认值、运动状态、步态、速度限制、状态频率和机器人授时行为，适用于当前
 BPX 系列协议及实现对应功能的固件，并非所有产品的统一默认值。使用各项 API 前需确认
@@ -39,18 +37,164 @@ BPX 系列协议及实现对应功能的固件，并非所有产品的统一默�
 
 使用前请确认 SDK 与机器人固件版本匹配。
 
+### BPW 基础状态与运动支持
+
+BPW 支持 `RequestRobotState` 和 `MotionLevelControl`，需要配套固件提供 BPW 状态及控制服务。
+运动控制要求运动程序已有的 `command_mode=4`（App，对应 `[user_command].mode = 4`）；
+键盘模式 `0` 仍支持状态、身份和版本查询，但 MotionControl 握手明确返回不支持错误 `1`，
+不会报告控制会话已就绪。
+可读取 IMU、当前/上一运动状态与步态、最大指令速度、电池、充电口、硬急停、故障、
+机型、整机 SN、固件版本和控制模式；尚未收到反馈的字段仍为不可用，连接成功不代表所有字段均有效。
+
+平地复用 `setWalk()` / `MotionGait.Walk = 0`。新增 `setRough() -> bool`，
+在已连接的 BPW 上选择 `MotionGait.Rough = 16`；BPX、BPX-Pro、未知机型或未连接时
+返回 `false` / `False`。切换后应等待实际步态反馈，并在机器人静止时再发送新步态速度。
+
+```python
+motion.setWalk()  # BPW 平地；现有方法在 Python 中仍返回 None。
+if not motion.setRough():
+    print("Rough gait unsupported or SDK not connected")
+```
+
+BPW 仅开放站立、坐下、阻尼、速度及上述两种步态。充电坐下、原地姿态、倒地爬起、
+翻转、跳跃和其他 BPX 步态均不支持。
+现有 void 选择器保持返回类型；BPW 请求不支持动作时保留当前指令，向 stderr 输出英文提示。
+调用前可通过机型查询判断支持范围。
+
+BPW 仍不支持旧 C++ 固定 12 轴的关节位置/速度/力矩、温度、无参 Array 接口，
+以及腿部里程计和里程计时间戳。相关旧接口在 C++ 返回 `false` / `nullopt`；
+Python 里程计接口返回 `None`，不支持的旧接口向 stderr 输出英文提示。
+即使收到旧 12 轴报文，也不将 BPW 的 16 轴截取为有效状态。
+新动态位置/速度/力矩、显式 `Array<N>` 和关节时间戳支持 BPW；
+Python 同名关节 getter 返回实际 N 轴列表，详见下节。
+新动态温度接口返回逐关节记录。Python `getMotorTemperature()` /
+`getDriverTemperature()` 仅在所有对应读数均有效时返回实际 N 轴列表；
+`getJointTemperatures()` 可查看包含逐项有效性的详细记录。
+`JointLevelControl.connect()` 识别 BPW 后拒绝连接，不发起关节控制/高频订阅或发送关节命令，
+所有关节层专属接口均暂不支持。`JOINT_COUNT=12` 仍仅描述 BPX 关节接口。
+
+server/client 示例支持 BPW 的 `gait walk` 和 `gait rough`，其他不支持动作返回
+`ERR unsupported on BPW`；状态示例读取动态关节状态、跳过腿部里程计，关节控制示例提示暂不支持。
+SDK 版本仍为 `2.0.0`。旧报文布局保持不变。
+
+### 动态 N 轴关节位置、速度与力矩
+
+Python `getJointStates()` 返回包含 `timestamp_ms`、`age_ms`、`sequence`、
+`topology_revision`、`joints` 的快照。每条记录包含 `joint_id`、`position`、
+`velocity`、`torque`；缺失的某一维为 `None`，0 是有效值。旋转/轮式关节单位依次为
+rad、rad/s、N*m。应按 ID 识别关节，不假定固定顺序；动态关节反馈最多支持 512 轴。
+C++ 提供 `getJointStates(JointStates*)` 和 `getJointStatesValue()`，公开类型位于
+`include/joint_states.h`。仅完整快照可用，本地年龄达到 **1000 ms** 时失效。
+64 位时间戳是机器人单调时间，不是 Unix 时间。
+
+```python
+snapshot = robot.getJointStates()
+if snapshot is not None:
+    for joint in snapshot["joints"]:
+        print(joint["joint_id"], joint["position"], joint["velocity"], joint["torque"])
+positions = robot.getJointPosition()  # 实际 N 轴列表，不可用时为 None
+```
+
+Python `getJointPosition()`、`getJointVelocity()`、`getJointTorque()` 与 C++
+`std::vector<float>&` 重载仅在每个关节的对应维均有效时返回完整列表。
+C++ 失败时保留原 vector；某列表不可用时，`getJointStates()` 仍可查看逐维缺项的快照。
+显式 C++ `getJointPositionArray<N>()`、`getJointVelocityArray<N>()`、
+`getJointTorqueArray<N>()` 要求轴数精确等于 N；数量不符或该维有缺项时返回
+`std::nullopt`，不截断或补齐。
+
+```cpp
+std::vector<float> positions;
+if (robot.getJointPosition(positions)) { /* positions.size() 是实际 N */ }
+auto positions16 = robot.getJointPositionArray<16>();
+auto snapshot = robot.getJointStatesValue();
+```
+
+六个旧 C++ 固定 12 轴关节状态 getter 标记为 **Deprecated（已弃用）**：
+`getJointPosition(float[12])`、`getJointVelocity(float[12])`、
+`getJointTorque(float[12])`、`getJointPositionArray()`、`getJointVelocityArray()`、
+`getJointTorqueArray()`。仍保留原有行为、固定 12 轴 ABI 及 BPW 拒绝行为。
+
+三个 `float[12]` 方法分别迁移到同名的 `getJointPosition(std::vector<float>&)`、
+`getJointVelocity(std::vector<float>&)`、`getJointTorque(std::vector<float>&)` 重载。
+三个无参 Array 方法分别替换为 `getJointPositionArray<N>()`、`getJointVelocityArray<N>()`、
+`getJointTorqueArray<N>()`，N 取预期的实际轴数。需要按 ID 读取或保留逐维缺项时，
+使用 `getJointStates()` / `getJointStatesValue()`。
+
+加上下节四个温度方法，共十个旧 C++ 状态/温度读取接口已弃用。vector 重载、显式
+`Array<N>`、`getJointStates()` / `getJointStatesValue()`、`getJointStateTimestamp()` /
+`getJointStateTimestampValue()` 以及 Python 动态 getter 不弃用。
+关节层固定 12 轴 `HighRate` 接口本轮未变更。
+
+`getJointStateTimestamp()` 返回新鲜动态快照时间戳
+低 32 位，完整 64 位请读快照；未支持扩展的旧 BPX/BPX-Pro 保持原时间戳 getter 行为。
+仅明确识别为 BPX/BPX-Pro 且固件不支持新关节状态扩展时，
+可回退旧 12 轴反馈（`topology_revision=0`）；BPW/未知产品需要固件支持动态关节状态反馈。
+支持动态反馈时，数据缺失、不完整、过期或无效均返回不可用，不以旧反馈替代。
+重连清空缓存快照。BPW 的关节控制和腿部里程计仍不支持。
+
+### 动态 N 轴关节温度
+
+应用通过下述 C++ 或 Python getter 读取关节温度，动态温度反馈需要机器人固件支持。
+
+Python `getJointTemperatures()` 返回新鲜快照，不可用时返回 `None`：
+
+```python
+snapshot = robot.getJointTemperatures()
+if snapshot is not None:
+    print("joints", len(snapshot["joints"]))
+    print(snapshot["timestamp_ms"], snapshot["age_ms"], snapshot["sequence"])
+    for joint in snapshot["joints"]:
+        print(joint["joint_id"], joint["motor_celsius"], joint["driver_celsius"])
+```
+
+快照包含 `timestamp_ms`、`age_ms`、`sequence`、`topology_revision`、`joints`；
+每条记录包含 `joint_id`、`motor_celsius`、`driver_celsius`。缺失的单个传感器为
+`None`，另一个仍可有效；0 摄氏度是有效值。`timestamp_ms` 是机器人单调采样时间，
+不是 Unix 时间；`age_ms` 由 SDK 本地单调时钟计算，达到 3000 ms 的快照不可用。
+通过关节 ID 识别记录，不能假定固定关节顺序或腿部布局。
+动态温度反馈最多支持 512 轴，包括 16/64 轴产品，不会截断为 12 或 16 轴。
+
+C++ 提供 `getJointTemperatures(JointTemperatures*)` 和 `getJointTemperaturesValue()`。
+Python `getMotorTemperature()` / `getDriverTemperature()` 仅在该类传感器全部有效时
+返回动态 N 轴列表。C++ 使用新增的 `getMotorTemperature(std::vector<float>&)` /
+`getDriverTemperature(std::vector<float>&)` 重载；失败时保留原输出 vector。
+完整列表不可用时，详细快照仍可提供其他有效记录。温度快照类型为
+`JointTemperature`、`JointTemperatures`。四个旧 C++ 方法
+`getMotorTemperature(float[12])`、`getDriverTemperature(float[12])`、
+`getMotorTemperatureArray()`、`getDriverTemperatureArray()` 标记为 **Deprecated（已弃用）**，
+仍保留原有行为、固定 12 轴大小及 BPW 不支持的限制。请迁移到上述 `std::vector<float>&`
+重载或 `getJointTemperatures()` / `getJointTemperaturesValue()`。
+vector 重载和 Python 同名动态温度接口不弃用；`JOINT_COUNT` 仍为旧固定大小接口的 12。
+
+使用旧固件且明确识别为 BPX/BPX-Pro 时，动态接口可读取旧 12 轴温度
+（`topology_revision=0`）。BPW 或未知产品需要固件支持动态温度反馈，否则 getter 返回不可用。
+支持动态反馈时，数据缺失、不完整、过期或无效均返回不可用，不以旧反馈替代。
+重连清空缓存温度快照。
+
+动态 API 需要匹配的头文件、原生库和 Python 绑定。构建绑定或 wheel 时，
+须在各目标平台从同一源码修订构建原生库。SDK 版本保持 `2.0.0`。
+
 ## 目录结构
+
+主要目录与常用文件如下：
 
 ```text
 mirrorme_robot_sdk/
   CMakeLists.txt
+  pyproject.toml
+  setup.py
+  cmake/
+    mirrorme_robot_sdk_extensions.cmake
   include/
     mirrorme_robot_sdk_config.h
     mirrorme_robot_sdk_version.h
     motion_types.h
+    joint_states.h
+    joint_temperatures.h
     request_robot_state.h
     motion_level_control.h
     joint_level_control.h
+    fault_code.h
   lib/
     libmirrorme_robot_sdk_x86_64.so
     libmirrorme_robot_sdk_aarch64.so
@@ -58,17 +202,44 @@ mirrorme_robot_sdk/
     mirrorme_robot_sdk_x86_64.lib
   bin/
     mirrorme_robot_sdk_x86_64.dll
+  mirrorme_robot_sdk/
+    __init__.py
+    __init__.pyi
+    py.typed
+  python/
+    mirrorme_robot_sdk_py.cpp
   example/
+    example_options.h
+    example_options.py
+    example_feedback.h
+    example_feedback.py
     request_robot_state_example.cpp
     request_robot_state_example.py
     motion_level_control_example.cpp
     motion_level_control_example.py
+    pose_tracking_example.cpp
+    pose_tracking_example.py
     joint_level_control_example.cpp
     joint_level_control_example.py
+    motion_level_control_server_example.cpp
+    motion_level_control_server_example.py
+    motion_level_control_client_example.cpp
+    motion_level_control_client_example.py
+  scripts/
+    build_wheels.py
+    build_linux_wheels.sh
+    build_macos_wheels.sh
+    build_windows_wheels.ps1
+    cibuildwheel-cp38.toml
   testcase/
+    CMakeLists.txt
+    motion_level_control_gait_test.cpp
+    python_api_smoke_test.py
     state_upload_rate_test.py
     tcp_reconnect_monitor.py
     tcp_reconnect_monitor_example.cpp
+  tests/
+  wheelhouse/
 ```
 
 ## 通用配置
@@ -80,8 +251,6 @@ mirrorme_robot_sdk/
 | `DEFAULT_SERVER_IP`                   | SDK 默认使用的机器人 IP。     |
 | `DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT` | 本机端口，用于接收机器人状态数据包。   |
 | `DEFAULT_CLIENT_JOINT_STATE_UDP_PORT` | 本机端口，预留用于接收关节状态上传数据。 |
-
-指令目标端口由机器人端固定，SDK 不将其作为公开配置暴露。
 
 SDK 默认机器人 IP 为 `10.21.20.1`（对应 RJ45 网口直连）。如需修改默认 IP，可以直接修改
 `include/mirrorme_robot_sdk_config.h` 中的配置，也可以在程序中调用 `setRobotIp` 接口设置目标机器人 IP。不同网络连接方式下应使用的 IP 见下文「网络连接与 IP」。
@@ -126,6 +295,8 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `Running`      | `8` |
 | `Tumbler` | `11` |
 | `Jump` | `12` |
+| `TrotRun` | `15` |
+| `Rough` | `16` |
 
 ### 主步态与子步态
 
@@ -133,7 +304,9 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 
 | 主步态            | 主步态原始值 | 子步态          | 子步态原始值 | 说明   |
 | -------------- | ------ | ------------ | ------- | ---- |
-| `Walk`         | `0`    | —            | —       | 行走   |
+| `Walk`         | `0`    | —            | —       | 行走 / BPW 平地 |
+| `Rough` | `16` | — | — | 仅 BPW 越障 |
+| `TrotRun` | `15` | — | — | BPX-Pro 慢跑步态 |
 | `Bipedal`      | `3`    | `F_HANDSTAND` | `-1`    | 倒立   |
 | `Bipedal`      | `3`    | `B_HANDSTAND` | `1`     | 正立   |
 | `Flip`         | `4`    | `GAIT_L_FLIP` | `-1`    | 左侧翻  |
@@ -172,17 +345,21 @@ if (robot_state.getSubGait(&raw_sub_gait)) {
 
 ### 步态速度限制
 
-速度指令使用 `[x, y, yaw]`，其中 `x`、`y` 为机身坐标系线速度，单位 m/s；`yaw` 为偏航角速度，单位 rad/s。以下数值为控制器内部对各步态速度指令的限幅：
+速度指令使用 `[x, y, yaw]`，其中 `x`、`y` 为机身坐标系线速度，单位 m/s；`yaw` 为偏航角速度，单位 rad/s。各步态的速度指令限制如下：
 
 | 步态             | 速度限制 `[x, y, yaw]`                                   |
 | -------------- | ---------------------------------------------------- |
 | `Walk`         | `[1.5, 0.5, 2.0]`                                    |
+| `TrotRun`（BPX-Pro） | `[2.5, 0.5, 2.0]` |
 | `Bipedal`      | `[0.8, 0.5, 1.5]`                                    |
 | `Flip`         | `[0.0, 0.0, 0.0]`                                    |
 | `WalkPhase`    | `[1.5, 1.0, 2.0]`                                    |
 | `PoseTracking` | `[0.0, 0.0, 0.0]`                                    |
 | `Running`      | `x: [-1.5, 3.0]`，`y: [-1.0, 1.0]`，`yaw: [-2.0, 2.0]` |
 | `Tumbler` | `[0.0, 0.0, 0.0]` |
+
+BPW 当前固件的平地上限为 `[4.0, 1.0, 3.0]`，越障上限为 `[1.5, 1.0, 1.0]`
+（m/s、m/s、rad/s）。实际策略上限以 `getMaxVelocity()` 反馈为准；上表为 BPX 系列策略。
 
 `Flip` 不使用行走速度指令。`Tumbler` 以六轴全零请求倒地爬起，不使用速度指令。`PoseTracking` 限制的是原地扭动指令，不是机身移动速度。对于 `Walk`、`Bipedal`、`WalkPhase` 和 `Running`，横向速度和偏航角速度会随着 `abs(x)` 增大进一步收缩，因此表中列出的是各轴基础限幅。
 
@@ -263,9 +440,15 @@ if (!robot_state.connect()) {
 
 | 接口                                    | 说明              |
 | ------------------------------------- | --------------- |
-| `getJointPosition(float[12])`         | 关节位置，单位为弧度。     |
-| `getJointVelocity(float[12])`         | 关节速度，单位为弧度/秒。   |
-| `getJointTorque(float[12])`           | 关节力矩。           |
+| `getJointStates(JointStates*)` / `getJointStatesValue()` | 按 ID 的动态位置/速度/力矩快照。 |
+| `getJointPosition(std::vector<float>&)` / `getJointVelocity(std::vector<float>&)` / `getJointTorque(std::vector<float>&)` | 对应维完整的动态 N 轴列表。 |
+| `getJointPositionArray<N>()` / `getJointVelocityArray<N>()` / `getJointTorqueArray<N>()` | 轴数精确为 N 时返回可选数组。 |
+| `getJointPosition(float[12])` | **Deprecated（已弃用）**：固定 12 轴位置；BPW 不支持。 |
+| `getJointVelocity(float[12])` | **Deprecated（已弃用）**：固定 12 轴速度；BPW 不支持。 |
+| `getJointTorque(float[12])` | **Deprecated（已弃用）**：固定 12 轴力矩；BPW 不支持。 |
+| `getJointPositionArray()` | **Deprecated（已弃用）**：可选固定 12 轴位置数组；迁移到 `getJointPositionArray<N>()`。 |
+| `getJointVelocityArray()` | **Deprecated（已弃用）**：可选固定 12 轴速度数组；迁移到 `getJointVelocityArray<N>()`。 |
+| `getJointTorqueArray()` | **Deprecated（已弃用）**：可选固定 12 轴力矩数组；迁移到 `getJointTorqueArray<N>()`。 |
 | `getImuRpy(float[3])`                 | 机身横滚、俯仰、偏航角。    |
 | `getImuQuat(float[4])`                | 机身四元数。          |
 | `getImuAcc(float[3])`                 | IMU 线加速度。       |
@@ -283,13 +466,19 @@ if (!robot_state.connect()) {
 | `getMaxVelocity(float[3])`            | 当前最大速度限制。       |
 | `getBatteryLevel(uint8_t*)`           | 电池电量百分比。        |
 | `getBatteryCurrent(float*)`           | 电池电流。           |
-| `getMotorTemperature(float[12])`      | 电机温度。           |
-| `getDriverTemperature(float[12])`     | 驱动器温度。          |
-| `getJointStateTimestamp(uint32_t*)`   | 最新关节状态时间戳。      |
+| `getJointTemperatures(JointTemperatures*)` | 按关节 ID 的动态温度快照，保留单项可用性与年龄。 |
+| `getMotorTemperature(std::vector<float>&)` | 完整动态电机温度列表。 |
+| `getDriverTemperature(std::vector<float>&)` | 完整动态驱动器温度列表。 |
+| `getMotorTemperature(float[12])`      | **Deprecated（已弃用）**：固定 12 轴电机温度。 |
+| `getDriverTemperature(float[12])`     | **Deprecated（已弃用）**：固定 12 轴驱动器温度。 |
+| `getMotorTemperatureArray()` | **Deprecated（已弃用）**：可选的固定 12 轴电机温度数组。 |
+| `getDriverTemperatureArray()` | **Deprecated（已弃用）**：可选的固定 12 轴驱动器温度数组。 |
+| `getJointStateTimestamp(uint32_t*)` | 动态反馈取新鲜快照低 32 位；旧 BPX 保留原行为。 |
 | `getImuTimestamp(uint32_t*)`          | 最新 IMU 数据时间戳。   |
 | `getOdometryTimestamp(uint32_t*)`     | 最新里程计数据时间戳。     |
 | `getMotionStateTimestamp(uint32_t*)`  | 最新运动状态时间戳。      |
 | `getBatteryTimestamp(uint32_t*)`      | 最新电池状态时间戳。      |
+| `getFaultTimestamp(uint32_t*)` | 最新故障报文头中的机器人相对时间戳。 |
 
 SDK 也提供返回数组、结构体或数值的可选辅助接口，例如 `getJointPositionArray()`、`getImuRpyArray()`、
 `getLegOdomValue()`、
@@ -297,7 +486,36 @@ SDK 也提供返回数组、结构体或数值的可选辅助接口，例如 `ge
 `getCurrentMotionStateEnum()`、`getCurrentGaitEnum()`、`getLastMotionStateEnum()` 和 `getLastGaitEnum()`，
 可直接返回 `MotionState` 或 `MotionGait`。
 
-示例文件：`example/request_robot_state_example.cpp`
+示例：[C++](example/request_robot_state_example.cpp) / [Python](example/request_robot_state_example.py)。
+
+### 状态查询示例覆盖范围
+
+两种示例每 200 ms 打印一帧，展示连接状态、观察到连接时的身份/缓存版本、实际 N 轴
+位置/速度/力矩与分别读取的电机/驱动器温度列表、带逐项有效性和年龄的 ID 快照、
+四组 IMU、当前/上次运动状态和步态、有符号 sub-gait、最大速度、受支持的腿部里程计、
+电量/电流/充电/急停，以及全部可用故障记录（最多 32 条，保留截断标志）。
+缺失值显示 `<unavailable>`；BPW 的腿部里程计及时间戳显示 `<unsupported>` 并跳过调用。
+一种温度列表不可用时仍展示另一种；完整简便列表不可用时，动态关节/温度快照仍展示逐项有效数据。
+
+`connection: connecting`、`connected`、`disconnected; retrying`、`reconnected`、
+`stopped` 表示每 200 ms 轮询 `isConnected()` 观察到的变化；
+短于轮询周期的断连可能被采样跳过。断连帧只显示连接标志和
+`telemetry=<unavailable: disconnected>`，不展示普通缓存。Ctrl+C 或 POSIX SIGTERM 会断开并正常退出。
+SDK 原有自动重连行为不变。
+
+`robot state:` 后是本机展示时间。`timestamps_ms` 依次显示机器人报文头中的关节、IMU、
+里程计、运动、电池、故障时间戳；关节简便时间戳为 32 位，关节快照保留完整 64 位单调时间。
+故障 `occurred_t_ms` 是 Unix epoch 毫秒。不要对不同时间域的值直接相减。
+运动/步态保留原始数值，以便展示新固件尚未命名的反馈。
+
+示例展示业务读取，不重复调用每个 `Value` / `Array` 薄封装或已弃用重载。
+`Array<N>` 精确轴数、Deprecated 编译诊断、过期或无效数据拒绝等 API 边界由独立检查负责。
+[示例行为测试](tests/test_request_robot_state_examples.py) 使用真实 C++/Python 子进程和本机回环对端，
+验证 BPX 完整反馈、BPW 16 轴部分读数、未来 64 轴反馈、断连/重连与 SIGTERM。
+运行 pytest 时设置 `MIRRORME_ROBOT_SDK_EXAMPLE_BUILD=build` 以包含已编译的 C++ 示例；
+[关节状态测试](tests/test_python_joint_states.py) 和[温度测试](tests/test_python_capabilities.py)
+验证底层动态 API。
+
 
 ### 整机 SN 与机型（C++）
 
@@ -373,8 +591,10 @@ if (!motion.connect()) {
 | ------------------------------------------ | ------------------------------ |
 | `setMotionCommandRate(uint16_t rate_hz)`   | 设置周期性指令发送频率。                   |
 | `setVelocityControlFlag(bool enabled)`     | 启用或关闭发送数据包中的速度控制标志。            |
-| `setZeroPositionsFlag()`                   | 设置零位置标志，示例程序会在发送正式运动指令前先发送该标志。 |
-| `setWalk()`                                | 切换到普通行走步态。                     |
+| `setZeroPositionsFlag()` | 请求 BPX/BPX-Pro 零位准备；识别为 BPW 时拒绝。 |
+| `setWalk()` | 切换普通行走步态；BPW 上表示平地。 |
+| `setTrotRun()` | 选择已有 BPX-Pro 慢跑步态（`TrotRun=15`）；BPW 不支持。 |
+| `setRough()` | 选择 BPW 越障步态；不支持或未连接时返回 false。 |
 | `setRunning()`                             | 切换到跑步步态。                       |
 | `setTumbler()` | 请求 BPX/BPX-Pro 倒地爬起；返回请求是否发送成功。 |
 | `setLeftFlip()`                            | 请求左侧翻动作。                       |
@@ -416,19 +636,41 @@ BPX 双足正立或倒立使用 `setBipedal()` / `setInvBipedal()`。
 `setBipedal()` / `setInvBipedal()` 适用于 BPX，BPX-Pro 不支持正立和倒立。
 
 
-使用 `setZeroPositionsFlag()` 标零前，必须确认机器人足底、小腿以及小腿和大腿连接处均接触地面。
-`example/motion_level_control_example.cpp` 默认会在程序开始阶段发送标零指令，因此运行
-`motion_level_control_example` 前，需要先确保 BPX 已处于上述标零姿态。
+BPX/BPX-Pro 使用 `setZeroPositionsFlag()` 标零前，必须确认机器人足底、小腿以及小腿和大腿连接处均接触地面。
+C++ 和 Python 运动示例先识别机型，再对 BPX/BPX-Pro 请求零位准备；BPW 跳过该请求。
+SDK 本身也会拒绝对已识别 BPW 的标零请求。
 
-示例文件：`example/motion_level_control_example.cpp`
+### 运动示例流程
+
+[C++](example/motion_level_control_example.cpp) 与
+[Python](example/motion_level_control_example.py) 使用相同流程：
+
+1. 最多等待 10 秒，确认连接已完成、型号明确为 BPX/BPX-Pro/BPW，且已收到运动状态和步态反馈。
+   型号未知或不可用时不开始动作。
+2. BPX/BPX-Pro 请求零位准备，BPW 跳过，然后准备 1 秒。
+3. 请求起立，最多等待 10 秒，确认新的运动反馈时间戳报告 `Motion`（`6`）。
+4. 零速切换 `Walk`，最多等待 10 秒，确认新反馈的状态为 `6`、步态为 `Walk`（`0`）；
+   BPW 上即平地步态。
+5. 使用 SI 速度控制发送 `(x, y, yaw) = (0, 0, 1.0)`，持续 3 秒；yaw 为 **1.0 rad/s**，
+   不是归一化输入。随后发送零速度，持续 2 秒。
+6. 请求坐下，最多等待 10 秒，确认新反馈为 `LyingDown`（`0`），然后断开。
+
+示例配置 50 Hz 指令频率，主控制循环间隔为 20 ms，每 200 ms 打印反馈。
+起立、Walk 和坐下均只接受该阶段首个成功命令后的新时间戳确认；
+仅状态/步态数值变化、时间戳未推进时不进入下一阶段。
+初始就绪确认后，连接丢失、运动反馈时间戳 1 秒不更新、阶段等待超时或命令返回失败，
+都会停止示例；即使 SDK 随后重连，也不自动恢复演示流程。
+
+Ctrl+C 或 POSIX SIGTERM 请求正常退出。清理仅在 Walk/yaw/零速阶段且仍连接时尝试发送零速度；
+进入坐下阶段后，示例清理只调用 `disconnect()`，不再调用 `setVelocity()` 重新请求运动。
+这些就绪和阶段等待属于示例自身的流程与校验。SDK `connect()` 发起期望连接，由示例另行确认就绪。
+
 
 ### 原地模式（PoseTracking）
 
 BPX 和 BPX-Pro 支持通过 `setPoseTracking()` 请求原地模式。机器人须已处于 `MotionState::Motion`；请求会将六轴全部清零，以满足步态切换条件。返回 `true` 只表示命令已发送，需要等待 `getCurrentGait()` / `getCurrentGaitEnum()` 返回 `PoseTracking` 后，再发送非零姿态输入。
 
-`setPose(x, y, z, r)` 在 C++ 和 Python 中都接收四个有限的归一化值，每个值须在 `[-1, 1]` 内，`r` 对应 yaw 输入。这些不是以米或弧度表示的位姿。SDK 内部按 `[x, y, r, z, 0, 0]` 填充协议通道，未开放的两个通道固定为零。
-
-当前控制端在各轴缩放前映射为 `[-y, x, r, 0, 0, z]`，保留已有的 X/Y 互换及互换后的 X 反向；SDK 不重复执行该映射。
+`setPose(x, y, z, r)` 在 C++ 和 Python 中都接收四个有限的归一化值，每个值须在 `[-1, 1]` 内，`r` 对应 yaw 输入。这些不是以米或弧度表示的位姿。
 
 - `setPose()` 自动使用归一化控制，不需要调用 `setVelocityControlFlag(false)`，也不会改变调用者为普通速度控制设置的标志。
 - 未在当前连接中调用 `setPoseTracking()`、已选择其他步态、连接未就绪或数值非法时，`setPose()` 返回 `false`，保留上一条有效命令。Python 的参数数量或类型错误抛出 `TypeError`。
@@ -615,8 +857,9 @@ severity 降序排列，`entries[0]` 即当前最高优先级故障；机器人�
 `entry_count=0` 心跳包持续上报。返回 `None`/false 仅表示尚未收到故障包
 （例如旧固件）。`occurred_t_ms` 为 Unix epoch 毫秒；可使用 `fault_code.h`
 中的位域解码辅助（`DecodeFaultSeverity/Module/SubModule/SubCode`）渲染故障码。
-示例输出 `faults=<count>[+truncated] top=0x…` 摘要。需要机器人固件支持该通道；
-`getFaultTimestamp()` 返回快照接收时间（单调时钟）。
+示例保留 `faults=<count>[+truncated] top=0x…` 摘要；状态查询示例另逐条打印全部记录及其 epoch 发生时间。
+需要机器人固件支持该通道；`getFaultTimestamp()` 返回故障报文头中的机器人相对时间戳，
+与 epoch 发生时间分属不同时间域。
 
 #### 当前固件实际会报告的故障码
 
@@ -734,9 +977,7 @@ wheel 输出到 `wheelhouse`。如需更改输出目录，可将目录路径作�
 ```
 
 在本地 macOS 上，`cibuildwheel` 只会使用 python.org 安装包提供的 CPython
-Framework。构建脚本会自动跳过本机未安装的 CPython 版本；GitHub Actions 中仍会构建完整配置矩阵。
-
-`.github/workflows/build-wheels.yml` 中的 GitHub Actions 工作流通过四个并行任务构建 Windows AMD64、Linux x86_64、Linux aarch64 和 macOS arm64 的 wheel 产物。Linux 分别使用原生 `ubuntu-22.04` 和 `ubuntu-22.04-arm` runner，每个任务只构建对应架构，无需 QEMU 模拟。可以在 Actions 页面手动触发，也可以推送 `v*` 标签触发。生成的 wheel 会作为工作流产物上传。
+Framework。构建脚本会自动跳过本机未安装的 CPython 版本。
 
 从本地 wheelhouse 安装：
 
@@ -848,6 +1089,15 @@ python3 example/motion_level_control_client_example.py status
 服务端默认监听 `127.0.0.1:50051`。跨机器使用时，服务端通过 `--listen-ip` 指定监听地址，客户端通过 `--server-ip` 指定服务端地址；端口分别使用 `--listen-port` 和 `--server-port`。该示例没有认证，仅适用于可信网络。一个服务端依次处理客户端连接；客户端不带命令时进入交互模式。
 
 `status` 返回连接状态、SN、机型、ControlMode、当前/上一运动状态、步态、最大速度以及电池和充电状态；暂不可用的字段显示 `<unavailable>`。服务端每秒打印带本机毫秒时间戳的状态，`battery_level`、`battery_current`、`charger_in1`、`charger_in2` 和 `hard_estop` 位于同一行。
+
+示例命令现为 `gait run`，调用 `setRunning()` / `MotionGait.Running = 8`；
+`gait running` 不再接受，BPW 仍不支持 `run`。使用新命令须更新并重启 server；SDK API 和枚举名不变。
+
+已有原生 BPX-Pro 慢跑步态也同步提供 Python `setTrotRun()` / `MotionGait.TrotRun = 15`
+及示例命令 `gait trotrun`，速度上限为 `[2.5, 0.5, 2.0]`。
+
+BPW 使用 `gait walk` 选择平地，`gait rough` 选择越障；不支持的动作返回错误。
+其他机型调用 `gait rough` 会提示不支持。
 
 支持 `zero`、`stand`、`tumbler`、`sit`、`charging-sit`、`damping`、`stop`、`velocity X Y YAW`、`velocity-control on|off` 和 `gait NAME`；`jump up|front|back|left|right` 分别对应向上、向前、向后、向左、向右跳跃（BPX）。实际可用动作以机型支持为准。客户端 `-h`/`--help` 可在不连接服务端时查看完整命令；连接后输入 `help` 可查看命令及全部步态、跳跃选项，`quit`（或 `shutdown`）关闭服务端。客户端显示的 `OK` 表示命令已被服务端处理，不表示机器人已完成动作。
 

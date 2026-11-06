@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
               << std::endl;
 
     if (!joint_level_control.connect()) {
-        std::cerr << "failed to connect joint level control" << std::endl;
+        std::cerr << "failed to connect joint level control; BPW joint control is unsupported" << std::endl;
         return 1;
     }
 

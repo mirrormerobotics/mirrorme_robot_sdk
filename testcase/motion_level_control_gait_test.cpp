@@ -392,6 +392,12 @@ int main(int argc, char** argv) {
         std::cerr << "failed to connect to robot " << options.robot_ip << '\n';
         return 1;
     }
+    const auto model = motion.getRobotModelValue();
+    if (model && *model == mirrorme_robot_sdk::RobotModel::BPW) {
+        std::cerr << "Bound gait test is unsupported on BPW; use walk/rough motion control\n";
+        motion.disconnect();
+        return 1;
+    }
     SafeStopGuard safe_stop(motion);
 
     motion.setZeroPositionsFlag();

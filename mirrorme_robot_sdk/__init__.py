@@ -3,7 +3,7 @@ import platform
 import sys
 from pathlib import Path
 from enum import IntEnum
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 
 _package_dir = Path(__file__).resolve().parent
 _dll_directory_handle = None
@@ -80,6 +80,8 @@ class MotionState(IntEnum):
 
 class MotionGait(IntEnum):
     Walk = _native.MOTION_GAIT_WALK
+    TrotRun = _native.MOTION_GAIT_TROT_RUN
+    Rough = _native.MOTION_GAIT_ROUGH
     Bipedal = _native.MOTION_GAIT_BIPEDAL
     Flip = _native.MOTION_GAIT_FLIP
     WalkPhase = _native.MOTION_GAIT_WALK_PHASE
@@ -87,6 +89,35 @@ class MotionGait(IntEnum):
     Running = _native.MOTION_GAIT_RUNNING
     Tumbler = _native.MOTION_GAIT_TUMBLER
     Jump = _native.MOTION_GAIT_JUMP
+
+
+class JointState(TypedDict):
+    joint_id: int
+    position: Optional[float]
+    velocity: Optional[float]
+    torque: Optional[float]
+
+
+class JointStates(TypedDict):
+    timestamp_ms: int
+    age_ms: int
+    sequence: int
+    topology_revision: int
+    joints: List[JointState]
+
+
+class JointTemperature(TypedDict):
+    joint_id: int
+    motor_celsius: Optional[float]
+    driver_celsius: Optional[float]
+
+
+class JointTemperatures(TypedDict):
+    timestamp_ms: int
+    age_ms: int
+    sequence: int
+    topology_revision: int
+    joints: List[JointTemperature]
 
 
 class LegOdom(TypedDict):
@@ -109,5 +140,9 @@ __all__ = [
     "MotionState",
     "RequestRobotState",
     "RobotModel",
+    "JointState",
+    "JointStates",
+    "JointTemperature",
+    "JointTemperatures",
     "ControlMode",
 ]

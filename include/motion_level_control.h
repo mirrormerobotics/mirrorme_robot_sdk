@@ -7,6 +7,8 @@
 
 namespace mirrorme_robot_sdk {
 
+// BPW supports Walk/Rough, velocity, stand-up, sit-down and damping only.
+// Other motion actions are rejected with an English stderr diagnostic.
 class MotionLevelControl : public RequestRobotState {
 public:
     MotionLevelControl();
@@ -17,9 +19,14 @@ public:
 
     void setMotionCommandRate(uint16_t rate_hz);
     void setVelocityControlFlag(bool enabled);
-    void setZeroPositionsFlag();
-    void setWalk();
+    void setZeroPositionsFlag();  // Unsupported on BPW.
+    void setWalk();  // BPW flat-terrain gait; sends zero axes on BPW.
+    // BPW only; sends zero axes to select rough terrain.
+    // Returns false without changing the command on other models
+    // or when a connected control session is unavailable.
+    bool setRough();
     void setRunning();
+    void setTrotRun();  // BPX-Pro medium-speed gait.
     // BPX/BPX-Pro self-righting request; sends six zero axes and sub-gait 0.
     // In LyingDown, each call requests recovery; periodic resends do not retrigger.
     // True means sent, not completed; robot-side safety checks still apply.

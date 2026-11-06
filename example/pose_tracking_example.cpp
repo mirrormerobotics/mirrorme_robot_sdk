@@ -72,6 +72,9 @@ int main(int argc, char** argv) {
               << " state_rate=" << options.state_rate_hz << '\n';
     try {
         if (!motion.connect()) throw std::runtime_error("connection failed");
+        const auto model = motion.getRobotModelValue();
+        if (model && *model == mirrorme_robot_sdk::RobotModel::BPW)
+            throw std::runtime_error("pose tracking is unsupported on BPW; use the motion example with walk/rough");
         std::cout << "request stand-up" << std::endl;
         WaitUntil([&] { return motion.setStandUp(); }, "stand-up request failed");
         WaitUntil([&] {

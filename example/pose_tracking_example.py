@@ -65,6 +65,8 @@ def main():
     try:
         if not motion.connect():
             raise RuntimeError('connection failed')
+        if motion.getRobotModel() == mirrorme_robot_sdk.RobotModel.BPW:
+            raise RuntimeError('pose tracking is unsupported on BPW; use the motion example with walk/rough')
         print('request stand-up', flush=True)
         wait_until(motion.setStandUp, 'stand-up request failed')
         wait_until(lambda: motion.getCurrentMotionState() == mirrorme_robot_sdk.MotionState.Motion,

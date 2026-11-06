@@ -11,11 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-11-04
 
+### Added
+
+- Expose the existing BPX-Pro jogging gait through Python
+  `setTrotRun()` / `MotionGait.TrotRun = 15` and examples.
+- Add BPW basic state subscriptions and motion control (stand, sit, damping,
+  velocity, flat through `setWalk()` and obstacle crossing through
+  `setRough()` / `MotionGait.Rough = 16`).
+- Add matching Python bindings, type hints, C++/Python examples and hardware-free
+  loopback coverage without changing SDK 2.0.0 or existing wire layouts.
+- Reject BPW fixed 12-joint/temperature/leg-odometry reads and joint-level control;
+  report unsupported operations without exposing partial joint data or sending commands.
+
+- Complete the C++/Python Request-state examples with all IMU and motion feedback,
+  full N-axis lists, independent temperature validity, all fault entries and six
+  packet timestamps; retain per-ID dynamic snapshots.
+- Run both real example CLIs against loopback BPX/BPW/future-product feedback,
+  including non-first joints, partial sensors, observed reconnects and graceful SIGTERM.
+- Read N-axis position/velocity/torque through `getJointStates()` / Value,
+  C++ vector and explicit `Array<N>` APIs, and Python dynamic lists. Preserve joint
+  IDs, per-dimension validity, 64-bit timestamps, complete snapshots and 1000 ms freshness.
+- Validate 16-axis BPW and future-product snapshots, stale or invalid data
+  rejection, reconnect and identified BPX legacy fallback using hardware-free peers.
+- Add per-ID `getJointTemperatures()` in C++/Python for dynamic joint temperature feedback.
+- Read dynamic N-axis motor/driver temperatures without truncation, preserve
+  missing-sensor values and sample age, and reject stale or mismatched feedback.
+- Keep legacy 12-axis fallback for identified BPX/BPX-Pro and existing fixed-size
+  C++ restrictions; add hardware-free compatibility, reconnect and temperature tests.
+
 ### Changed
 
 - Prepare MirrorMe Robot SDK 2.0.0 from the complete BPX SDK history for shared
-  internal development and external integration through
-  `mirrormerobotics/mirrorme_robot_sdk`.
+  internal development and external integration.
 - Rename the pip distribution to `mirrorme-robot-sdk`; rename Python imports,
   C++ namespaces, native libraries, headers, build options, and CI artifacts to
   `mirrorme_robot_sdk` / `MIRRORME_ROBOT_SDK_*`. C++ applications must be rebuilt;
@@ -26,8 +53,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the migration from the legacy package. Remove legacy prebuilt artifacts;
   generate new libraries and wheels from the renamed implementation.
 - Compile MSVC examples and Python bindings with UTF-8 source encoding.
-- Update the default build repository and master-branch examples, and synchronize
+- Update the master-branch examples and synchronize
   the English and Chinese build instructions.
+
+- Rename the example command `gait running` to `gait run` without an alias;
+  it still calls `setRunning()` / `MotionGait.Running = 8`, while `trotrun` remains
+  `TrotRun = 15` and BPW rejects `run`. Update and restart the server; SDK APIs and enums are unchanged.
+- Align the C++/Python motion demos: wait for a completed connection, an identified
+  BPX/BPX-Pro/BPW and motion feedback; prepare for 1 second, stand up, confirm Walk
+  at zero velocity, yaw at 1.0 rad/s for 3 seconds, zero for 2 seconds, then confirm sit-down.
+- Require new motion timestamps for stand/Walk/sit transitions (10 seconds each),
+  abort on connection loss, 1-second feedback stalls or command failure, and stop
+  on Ctrl+C/POSIX SIGTERM. Keep 50 Hz commands, a 20 ms loop and 200 ms feedback output;
+  cleanup requests zero only during motion phases and only disconnects after sit-down.
+- Request-state examples poll connection changes every 200 ms, refresh cached
+  identity/version when connected/reconnected, and suppress cached telemetry
+  while disconnected.
+- Distinguish host display time, robot-relative packet/snapshot times and epoch
+  fault occurrence times; remove the former 12-axis-only temperature summary.
+- Python joint position/velocity/torque getters now return the actual N-axis list
+  only when that dimension is complete; joint timestamp returns the fresh snapshot's
+  low 32 bits. Existing fixed 12-axis C++ ABI and BPW joint-control restrictions remain.
+- Request-state examples read dynamic joints on BPW; server status gets joint count
+  from fresh joint states first, then temperatures.
+- Python motor/driver-temperature getters return a complete dynamic list or `None`;
+  state examples display joint IDs/counts and server status reports the available snapshot joint count.
+- Require matching native libraries for the new APIs; Windows/macOS prebuilt
+  libraries must be rebuilt before packaging the new bindings. SDK stays 2.0.0.
+
+### Deprecated
+
+- Mark the six legacy C++ fixed 12-axis joint-state getters as deprecated:
+  `getJointPosition(float[12])`, `getJointVelocity(float[12])`,
+  `getJointTorque(float[12])`, `getJointPositionArray()`, `getJointVelocityArray()`,
+  and `getJointTorqueArray()`. Existing behavior remains available; migrate the
+  pointer methods to their same-name `std::vector<float>&` overloads and the
+  no-argument array methods to their respective explicit `Array<N>()` templates,
+  or use `getJointStates()` / `getJointStatesValue()`.
+- Keep the four legacy C++ fixed 12-axis temperature methods deprecated:
+  `getMotorTemperature(float[12])`, `getDriverTemperature(float[12])`,
+  `getMotorTemperatureArray()`, and `getDriverTemperatureArray()`.
+  Their existing behavior remains available; migrate to the `std::vector<float>&`
+  overloads or `getJointTemperatures()` / `getJointTemperaturesValue()`.
+- Ten legacy state/temperature getters are deprecated in total. Vector overloads,
+  explicit `Array<N>`, `getJointStates()` / `getJointStatesValue()`, joint timestamp
+  getters and Python dynamic interfaces are not deprecated. The joint-level
+  fixed 12-axis `HighRate` APIs are unchanged.
+
+### Fixed
+
+- Skip zero-position preparation on BPW in both motion demos and remove the
+  misleading left-flip phase log; the demonstration uses Walk, without a Rough stage.
+- Skip fixed 12-joint temperature queries in the C++ state example on BPW, avoiding repeated unsupported-operation messages.
 
 ## [1.0.11] - 2026-10-13
 
@@ -73,15 +150,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   C++/Python server/client combinations.
 - Add `setPoseTracking()` and `setPose(x, y, z, r)` to C++ and Python for
   BPX/BPX-Pro pose tracking, including Python type hints. Pose inputs are finite
-  normalized values in `[-1, 1]`; `r` is yaw, and the two unused wire channels
-  remain zero.
+  normalized values in `[-1, 1]`; `r` is yaw.
 - Add C++ and Python pose-tracking examples using the shared connection options.
   Each example automatically stands up, waits for motion and gait feedback,
   sweeps `x`, `y`, `z`, and `r` in order, then lies down and waits for completion.
   Each axis holds `-1000` for one second, sweeps to `1000` over three seconds,
   holds for one second, then returns to zero for one second. Output includes
   all four values.
-- Add loopback coverage for pose input validation, wire-channel mapping,
+- Add loopback coverage for pose input validation, axis behavior,
   gait transitions, and example sequencing and timing.
 - Add `getHardEstop()` / `getHardEstopValue()` to C++ state queries and
   `getHardEstop()` to all Python state classes (with type hints): 1 while the
@@ -95,15 +171,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plus a `truncated` flag. Entries are sorted severity-descending, so
   `entries[0]` is the top-priority fault; `entry_count=0` snapshots arrive as
   a heartbeat while the robot is fault-free. `None`/false only means no fault
-  packet has been received yet (e.g. an older robot). Custom fields stay on
-  the robot's local IPC channel.
+  packet has been received yet (e.g. an older robot).
 - Add `getFaultTimestamp()` / `getFaultTimestampValue()` for the receive
   time of the latest fault snapshot (monotonic clock, not comparable with
   `occurred_t_ms`, which is Unix epoch milliseconds).
 - Add the public header `fault_code.h` documenting the 64-bit fault-code
   bitfields (version / separator / severity / module / sub-module / sub-code)
   with `DecodeFault*()` helpers and `FaultSeverity` / `FaultModule` enums, so
-  applications can render codes without internal headers.
+  applications can decode and display fault codes.
 - Show an active-fault summary (`faults=<count>[+truncated] top=0x…`) in the
   C++ and Python feedback examples.
 
@@ -116,9 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when leaving pose tracking or disconnecting.
 - Unknown UDP packet heads are now logged once per head value instead of once
   per packet, keeping logs clean as new channels appear.
-- `FaultCodeManager` on the robot is now thread-safe and its snapshot ordering
-  is deterministic (severity descending, ties by smallest packed code), which
-  also makes the IPC `primary_code` stable across runs.
+- Make fault snapshot ordering deterministic: severity descending, with ties
+  ordered by the smallest packed fault code.
 
 ### Compatibility
 
@@ -189,9 +263,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Ensure `setZeroPositionsFlag()` never generates the reserved zero tag,
-  preventing zero-position preparation requests from being silently ignored
-  by the robot.
+- Fix zero-position preparation requests from `setZeroPositionsFlag()` being
+  silently ignored by the robot.
 
 ### Removed
 

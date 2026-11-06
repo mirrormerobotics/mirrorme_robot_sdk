@@ -8,6 +8,8 @@ namespace mirrorme_robot_sdk::protocol {
 // SubscribeStateResp.reserved[0] identifies control-mode feedback revision 1;
 // reserved[1] carries 0=remote control, 1=navigator, 255=unknown.
 constexpr uint32_t kControlModeFeedbackTag = 0x434D0001U;
+// A rejected subscription with this error is permanent for the requested mode.
+constexpr uint32_t kSubscribeErrorUnsupportedOperation = 1U;
 
 enum class HostServerMode : uint8_t {
     Test = 0,

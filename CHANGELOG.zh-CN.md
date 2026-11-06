@@ -11,10 +11,28 @@
 
 ## [2.0.0] - 2026-11-04
 
+### 新增
+
+- 同步已有 BPX-Pro 慢跑步态 `setTrotRun()` / `MotionGait.TrotRun = 15` 的 Python 绑定与示例。
+- 支持 BPW 基础状态订阅及运动层：站立、坐下、阻尼、速度、复用 `setWalk()` 的平地，以及
+  `setRough()` / `MotionGait.Rough = 16` 的越障步态。
+- 同步 Python 绑定、类型存根、C++/Python 示例及不依赖真机的回环测试；保持 SDK 2.0.0 与现有线上报文布局。
+- BPW 明确拒绝固定 12 轴关节/温度/腿部里程计读取及关节层控制，不返回截断关节数据或发送不支持命令。
+
+- 补齐 C++/Python 状态查询示例的四组 IMU、全部运动反馈、完整 N 轴列表、独立温度有效性、
+  全部故障记录与六组报文时间戳，保留按 ID 的动态快照。
+- 使用真实示例子进程与 BPX/BPW/未来产品回环反馈验证非首轴、传感器缺项、观察到的重连和 SIGTERM 正常退出。
+- 通过 `getJointStates()` / Value、C++ vector 和显式 `Array<N>`、Python 动态列表
+  读取 N 轴位置/速度/力矩，保留关节 ID、逐维有效性、64 位时间戳、完整快照与 1000 ms 新鲜度。
+- 使用不依赖硬件的对端验证 16 轴 BPW、未来产品快照、过期或无效数据拒绝、重连与旧 BPX 回退。
+- 新增按关节 ID 的 C++/Python `getJointTemperatures()`，用于读取动态关节温度反馈。
+- 动态读取 N 轴电机/驱动器温度，不截断轴数，保留单个传感器缺项和采样年龄，拒绝过期或不匹配反馈。
+- 明确 BPX/BPX-Pro 的旧 12 轴回退及固定 C++ 接口限制，增加不依赖真机的兼容性、重连和温度测试。
+
 ### 变更
 
 - 基于 BPX SDK 的完整历史准备 MirrorMe Robot SDK 2.0.0，统一服务内部开发和
-  对外集成，对外仓库为 `mirrormerobotics/mirrorme_robot_sdk`。
+  对外集成。
 - pip 分发包改名为 `mirrorme-robot-sdk`；Python 导入、C++ 命名空间、原生库、
   头文件、构建选项及 CI 产物统一使用 `mirrorme_robot_sdk` / `MIRRORME_ROBOT_SDK_*`。
   C++ 应用需重新编译；现有线上报文格式和枚举值保持一致。
@@ -23,7 +41,46 @@
 - 补充机型支持范围、固定 12 关节接口、源码/构建边界与旧包迁移说明；
   移除旧预编译产物，新库和 wheel 由改名后的实现生成。
 - MSVC 示例和 Python 绑定显式使用 UTF-8 源码编码。
-- 更新默认构建仓库和 master 分支示例，同步中英文构建说明。
+- 更新 master 分支示例，同步中英文构建说明。
+
+- 示例命令由 `gait running` 更名为 `gait run`，不保留旧命令别名；仍调用
+  `setRunning()` / `MotionGait.Running = 8`，`trotrun` 仍为 `TrotRun = 15`，BPW 仍不支持 `run`。
+  使用新命令须更新并重启 server，SDK API 与枚举不变。
+- 统一 C++/Python 运动示例：等待连接完成、识别 BPX/BPX-Pro/BPW 并收到运动反馈，准备 1 秒，
+  起立、零速确认 Walk、以 1.0 rad/s 偏航 3 秒、零速 2 秒，最后确认坐下。
+- 起立/Walk/坐下阶段均等待新运动时间戳（各最多 10 秒）；连接丢失、反馈停更 1 秒或命令失败时退出，
+  支持 Ctrl+C/POSIX SIGTERM 停止。保持 50 Hz 指令、20 ms 主循环及 200 ms 反馈输出；
+  仅在运动阶段清理补零，坐下后清理仅断开。
+- 状态查询示例每 200 ms 观察连接变化，在连接/重连时显示身份与缓存版本，断连时不展示普通缓存。
+- 明确本机展示时间、机器人相对报文/快照时间和 epoch 故障发生时间，移除原有仅 12 轴温度摘要。
+- Python 关节位置/速度/力矩 getter 在对应维完整时返回实际 N 轴列表，关节时间戳返回
+  新鲜快照低 32 位；旧 C++ 固定 12 轴 ABI 与 BPW 关节控制限制保留。
+- 状态示例读取 BPW 动态关节，server 状态优先从新鲜关节快照取得轴数，其次回退温度快照。
+- Python 电机/驱动器温度 getter 返回完整动态列表或 `None`；状态示例展示关节 ID/数量，
+  server 状态显示可用温度快照的关节数量。
+- 新 API 必须使用匹配原生库；Windows/macOS 预编译库须在打包新绑定前重建，SDK 仍为 2.0.0。
+
+### 已弃用
+
+- 将六个旧 C++ 固定 12 轴关节状态 getter 标记为已弃用：
+  `getJointPosition(float[12])`、`getJointVelocity(float[12])`、
+  `getJointTorque(float[12])`、`getJointPositionArray()`、`getJointVelocityArray()`、
+  `getJointTorqueArray()`。保留原有行为；指针方法迁移到同名 `std::vector<float>&`
+  重载，无参 Array 方法迁移到对应的显式 `Array<N>()` 模板，或使用
+  `getJointStates()` / `getJointStatesValue()`。
+- 四个旧 C++ 固定 12 轴温度方法继续标记为已弃用：
+  `getMotorTemperature(float[12])`、`getDriverTemperature(float[12])`、
+  `getMotorTemperatureArray()`、`getDriverTemperatureArray()`。
+  保留原有行为；请迁移到 `std::vector<float>&` 重载或
+  `getJointTemperatures()` / `getJointTemperaturesValue()`。
+- 合计十个旧状态/温度读取接口已弃用。vector 重载、显式 `Array<N>`、
+  `getJointStates()` / `getJointStatesValue()`、关节时间戳 getter 和 Python 动态接口
+  不弃用。关节层固定 12 轴 `HighRate` 接口本轮未变更。
+
+### 修复
+
+- 两种运动示例均在 BPW 上跳过零位准备，移除虚假的左侧翻阶段日志；演示使用 Walk，不增加 Rough 阶段。
+- C++ 状态示例在 BPW 上跳过固定 12 轴温度读取，避免重复输出不支持提示。
 
 ## [1.0.11] - 2026-10-13
 
@@ -62,12 +119,12 @@
 - 增加 Python 指令编码、状态反馈和 C++/Python 全部 server/client 组合的回环测试。
 - 为 BPX/BPX-Pro 在 C++ 和 Python 中新增原地模式接口 `setPoseTracking()`
   和 `setPose(x, y, z, r)`，并补充 Python 类型提示。姿态输入为 `[-1, 1]`
-  范围内的有限归一化值，`r` 对应 yaw，协议中未开放的两个通道保持为零。
+  范围内的有限归一化值，`r` 对应 yaw。
 - 新增使用公共连接参数的 C++ 和 Python 原地模式示例：自动站立并等待运动状态及
   步态反馈，依次执行 `x → y → z → r`，完成后自动趴下并等待完成反馈。
   每轴先在 `-1000` 保持 1 秒，再用 3 秒渐变至 `1000`，保持 1 秒后归零，
   归零后等待 1 秒；输出包含全部四轴数值。
-- 新增回环测试，覆盖姿态输入校验、协议通道映射、步态切换，以及示例动作顺序和时序。
+- 新增回环测试，覆盖姿态输入校验、坐标轴行为、步态切换，以及示例动作顺序和时序。
 - C++ 状态查询新增 `getHardEstop()` / `getHardEstopValue()`，Python 各状态类新增
   `getHardEstop()`（含类型提示）：硬急停开关按下（所有关节掉电）时返回 1，释放
   返回 0，1 Hz 反馈到达前返回 `None`/false。该状态由 1 Hz 状态标志位 bit 2 携带，
@@ -78,12 +135,11 @@
   `{code, occurred_t_ms}` 条目及 `truncated` 标志。条目按 severity 降序排列，
   `entries[0]` 即当前最高优先级故障；机器人无故障时仍以 `entry_count=0`
   心跳包持续上报。返回 `None`/false 仅表示尚未收到故障包（例如旧固件）。
-  custom_fields 不进该通道，仍由机器人本机 IPC 通道承载。
 - 新增 `getFaultTimestamp()` / `getFaultTimestampValue()`：最近一帧故障快照
   的接收时间（单调时钟，与 Unix epoch 毫秒的 `occurred_t_ms` 不可互减）。
 - 新增公共头 `fault_code.h`：64 位故障码位域说明（version / separator /
   severity / module / sub-module / sub-code）、`DecodeFault*()` 解码辅助与
-  `FaultSeverity` / `FaultModule` 枚举，应用无需内部头文件即可渲染故障码。
+  `FaultSeverity` / `FaultModule` 枚举，供应用解码和展示故障码。
 - C++ 与 Python 反馈示例增加活动故障摘要输出
   （`faults=<count>[+truncated] top=0x…`）。
 
@@ -95,8 +151,7 @@
 - 补充姿态输入范围、步态反馈要求，以及退出原地模式和断线时的归零行为说明。
 - 未知 UDP 包头（head）的 stderr 日志改为按 head 值去重，每个值只打印一次，
   后续新增通道不再刷屏。
-- 机器人侧 `FaultCodeManager` 线程安全化，快照排序确定化（severity 降序、
-  并列取打包码最小），IPC 通道的 `primary_code` 也随之稳定。
+- 统一故障快照排序：severity 降序，同严重程度按打包故障码升序排列。
 
 ### 兼容性
 
@@ -157,8 +212,7 @@
 
 ### 修复
 
-- 确保 `setZeroPositionsFlag()` 不会生成保留的零标记，避免机器人静默忽略
-  零位准备请求。
+- 修复机器人静默忽略 `setZeroPositionsFlag()` 零位准备请求的问题。
 
 ### 移除
 

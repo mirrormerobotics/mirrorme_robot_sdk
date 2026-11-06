@@ -145,7 +145,7 @@ def main():
     )
 
     if not joint_level_control.connect():
-        raise RuntimeError("failed to connect joint level control")
+        raise RuntimeError("failed to connect joint level control; BPW joint control is unsupported")
 
     try:
         print_robot_version(joint_level_control)

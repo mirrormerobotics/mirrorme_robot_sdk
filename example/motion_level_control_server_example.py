@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import mirrorme_robot_sdk
-from example_feedback import format_control_mode, format_power_state, print_identity_availability
+from example_feedback import format_control_mode, format_power_state, format_joint_count, print_identity_availability
 from request_robot_state_example import print_robot_version
 
 
@@ -39,7 +39,7 @@ def parse_args():
         epilog=(
             "Commands: zero, stand, tumbler, sit, charging-sit, damping, stop, status,\n"
             "          velocity X Y YAW, velocity-control on|off,\n"
-            "          gait walk|running|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip,\n"
+            "          gait walk|rough|trotrun|run|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip,\n"
             "          jump up|front|back|left|right, quit"
         ),
     )
@@ -89,6 +89,7 @@ def status_line(motion):
         f"last_motion_state={str(last_state) + '(' + motion_state_name(last_state) + ')' if last_state is not None else '<unavailable>'} "
         f"gait={str(gait) + '(' + motion_gait_name(gait) + ')' if gait is not None else '<unavailable>'} "
         f"max_vel={velocity if velocity is not None else '<unavailable>'} "
+        f"joint_count={format_joint_count(motion)} "
         f"{format_power_state(motion)}"
     )
 
@@ -111,7 +112,7 @@ def execute_command(motion, sdk_lock, line):
     if command == "help":
         return (
             "OK commands: zero, stand, tumbler, sit, charging-sit, damping, stop, status, "
-            "velocity X Y YAW, velocity-control on|off, gait walk|running|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip, jump up|front|back|left|right, help, quit|shutdown",
+            "velocity X Y YAW, velocity-control on|off, gait walk|rough|trotrun|run|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip, jump up|front|back|left|right, help, quit|shutdown",
             False,
         )
 
@@ -121,6 +122,10 @@ def execute_command(motion, sdk_lock, line):
 
 def execute_motion_command(motion, words):
     command = words[0]
+    if motion.getRobotModel() == mirrorme_robot_sdk.RobotModel.BPW and (
+            command in ("zero", "tumbler", "charging-sit", "jump") or
+            (command == "gait" and len(words) == 2 and words[1] not in ("walk", "rough"))):
+        return "ERR unsupported on BPW: " + " ".join(words), False
     if command == "zero":
         motion.setZeroPositionsFlag()
         return "OK zero-position flag sent", False
@@ -170,7 +175,9 @@ def execute_motion_command(motion, words):
             return "ERR usage: gait NAME", False
         gait_handlers = {
             "walk": motion.setWalk,
-            "running": motion.setRunning,
+            "rough": motion.setRough,
+            "trotrun": motion.setTrotRun,
+            "run": motion.setRunning,
             "bipedal": motion.setBipedal,
             "inv_bipedal": motion.setInvBipedal,
             "pronk": motion.setPronk,
@@ -182,7 +189,9 @@ def execute_motion_command(motion, words):
         handler = gait_handlers.get(words[1])
         if handler is None:
             return "ERR unknown gait", False
-        handler()
+        result = handler()
+        if words[1] == "rough" and not result:
+            return "ERR rough gait unsupported or not connected (BPW only)", False
         return "OK gait command sent", False
     if command in ("quit", "shutdown"):
         return "OK server shutting down", True

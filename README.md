@@ -6,7 +6,7 @@ MirrorMe Robot SDK provides C++ and Python interfaces for robot state queries, m
 
 SDK version: `2.0.0`
 
-Documentation updated: `2026-11-05`
+Documentation updated: `2026-11-06`
 
 The current BPX implementation offers three usage modes:
 
@@ -21,8 +21,7 @@ The SDK interfaces and state fields are still in an early implementation stage. 
 ## Project Scope and Product Support
 
 MirrorMe Robot SDK is maintained for shared use across the company's robot products,
-including internal development and external integration. The public distribution
-repository is [mirrormerobotics/mirrorme_robot_sdk](https://github.com/mirrormerobotics/mirrorme_robot_sdk).
+including internal development and external integration.
 The current implementation is derived from BPX SDK; a shared SDK does not imply
 that every model supports every API.
 
@@ -30,13 +29,180 @@ that every model supports every API.
 | --- | --- | --- |
 | BPX (C2) | Model and serial-number queries | Existing motion APIs and 12-joint APIs; individual actions remain model-specific. |
 | BPX-Pro (C2) | Model and serial-number queries | Existing supported motion APIs and 12-joint APIs; bipedal upright/inverted stances are unavailable. |
-| BPW (A2) | Model value and identity-response decoding are present | Full state/control adaptation is not established here. The existing 12-joint API does not represent BPW's 16 joints, including four wheel joints. |
-| BAOBAO (C1) and other products | No dedicated adapter in this distribution | Product adaptation and validation remain future work. |
+| BPW (A2) | Model and serial-number queries | Basic state, dynamic N-axis joint/temperature feedback, and motion control: stand, sit, damping, velocity, flat (`Walk=0`) and obstacle crossing (`Rough=16`). Joint-level control is unsupported. |
 
 The network defaults, motion states, gaits, velocity limits, state rates, and
 robot time-sync behavior below describe the current BPX-family protocol and the
 firmware that implements those features. They are not universal product defaults.
 Check the model and firmware support before using each API.
+
+### BPW basic state and motion support
+
+BPW supports `RequestRobotState` and `MotionLevelControl`. Firmware must provide the
+BPW state/control service. Motion control requires the motion program's existing
+`command_mode=4` (App, `[user_command].mode = 4`). In keyboard mode (`0`), state,
+identity and version queries remain available, while the MotionControl handshake
+is rejected with unsupported-operation error `1`; it must not report a live control session.
+Readable feedback includes IMU, current/previous motion
+state and gait, maximum command velocity, battery, charger inputs, hard estop,
+faults, model, serial number, firmware version and control mode. A field without
+feedback remains unavailable; successful connection does not make every field valid.
+
+Flat terrain reuses `setWalk()` / `MotionGait.Walk = 0`. `setRough() -> bool`
+selects `MotionGait.Rough = 16` on a connected BPW and returns `false` / `False`
+for BPX, BPX-Pro, unknown models or a disconnected client. Wait for actual gait
+feedback and a stationary robot before sending velocity in a new gait.
+
+```python
+motion.setWalk()  # BPW flat; existing method returns None in Python.
+if not motion.setRough():
+    print("Rough gait unsupported or SDK not connected")
+```
+
+BPW accepts stand, sit, damping, velocity and the two gait selectors above.
+Charging sit, pose tracking, recovery, flips, jumps and the other BPX gait actions
+are unsupported.
+Legacy void selectors retain their return type; rejected BPW requests leave the
+active command unchanged and report an English message to stderr. Use the model
+query to check support before calling them.
+
+The legacy fixed 12-joint C++ position/velocity/torque, temperature and no-argument
+array getters, leg odometry and its timestamp remain unsupported on BPW.
+Those legacy APIs return `false` / `nullopt` in C++; Python odometry returns `None`.
+Unsupported legacy operations print an English stderr message, including when a
+caller supplies a legacy 12-joint packet. New dynamic joint getters, explicit
+`Array<N>` and joint timestamps support BPW; Python
+position/velocity/torque getters return the actual N-axis list as described below.
+The new dynamic temperature APIs return per-joint records and never
+truncate BPW's 16 joints. Python `getMotorTemperature()` / `getDriverTemperature()`
+return a list of the actual joint count only when every corresponding
+reading is valid; use `getJointTemperatures()` to inspect partial records. `JointLevelControl.connect()` rejects BPW without
+starting joint-control/high-rate subscriptions or sending joint commands. All
+joint-level-specific methods remain unsupported. The existing `JOINT_COUNT=12`
+continues to describe the BPX joint interface.
+
+The server/client examples accept `gait walk` and `gait rough` on BPW and report
+`ERR unsupported on BPW` for unavailable actions. The state example reads
+dynamic joint state and temperature feedback and skips leg odometry; the joint-control example reports the unsupported model.
+The SDK version remains `2.0.0`. Legacy packet layouts are unchanged.
+
+### Dynamic N-axis joint position, velocity and torque
+
+`getJointStates()` returns a Python snapshot with `timestamp_ms`, `age_ms`,
+`sequence`, `topology_revision`, and `joints`. Each record contains `joint_id`,
+`position`, `velocity`, and `torque`; a missing dimension is `None`, while zero
+is valid. Rotary/wheel joints use rad, rad/s and N*m. Identify joints by ID
+instead of assuming a fixed joint order. Dynamic joint feedback supports up to
+512 joints. C++ exposes `getJointStates(JointStates*)` and
+`getJointStatesValue()`, with public types in `include/joint_states.h`.
+Only complete snapshots are available; snapshots become unavailable at
+**1000 ms** of local age. The 64-bit timestamp is robot-relative monotonic time.
+
+```python
+snapshot = robot.getJointStates()
+if snapshot is not None:
+    for joint in snapshot["joints"]:
+        print(joint["joint_id"], joint["position"], joint["velocity"], joint["torque"])
+positions = robot.getJointPosition()  # actual N-axis list, or None
+```
+
+Python `getJointPosition()`, `getJointVelocity()`, and `getJointTorque()` and the
+C++ `std::vector<float>&` overloads return a complete list only if every joint
+has the requested dimension. C++ failure leaves the vector unchanged. A partial
+snapshot remains available through `getJointStates()` even when one list is unavailable.
+Explicit C++ `getJointPositionArray<N>()`, `getJointVelocityArray<N>()`, and
+`getJointTorqueArray<N>()` require exactly N joints; a count mismatch or missing
+value returns `std::nullopt`, without truncation or padding.
+
+```cpp
+std::vector<float> positions;
+if (robot.getJointPosition(positions)) { /* positions.size() is the actual N */ }
+auto positions16 = robot.getJointPositionArray<16>();
+auto snapshot = robot.getJointStatesValue();
+```
+
+The six legacy C++ fixed 12-axis joint-state getters are **Deprecated**:
+`getJointPosition(float[12])`, `getJointVelocity(float[12])`,
+`getJointTorque(float[12])`, `getJointPositionArray()`, `getJointVelocityArray()`,
+and `getJointTorqueArray()`. Their existing behavior and fixed 12-axis ABI remain
+unchanged; BPW remains unsupported.
+
+For the three `float[12]` methods, migrate to the respective same-name
+`getJointPosition(std::vector<float>&)`, `getJointVelocity(std::vector<float>&)`,
+and `getJointTorque(std::vector<float>&)` overloads. Replace the three no-argument
+array methods with `getJointPositionArray<N>()`, `getJointVelocityArray<N>()`,
+and `getJointTorqueArray<N>()`, respectively, using the expected actual axis count N.
+Use `getJointStates()` / `getJointStatesValue()` when per-ID records or partial
+validity are needed.
+
+Together with the four temperature methods documented below, ten legacy C++
+state/temperature getters are deprecated. Vector overloads, explicit `Array<N>`,
+`getJointStates()` / `getJointStatesValue()`, `getJointStateTimestamp()` /
+`getJointStateTimestampValue()`, and Python dynamic getters are not deprecated.
+The joint-level fixed 12-axis `HighRate` APIs are unchanged by this deprecation.
+
+`getJointStateTimestamp()` returns the low 32 bits of a fresh dynamic timestamp; use the snapshot for all 64 bits.
+Legacy BPX/BPX-Pro without the extension retain their existing timestamp getter behavior.
+Only identified BPX/BPX-Pro may fall back to legacy 12-axis joint feedback when the
+firmware does not support the new joint-state extension (`topology_revision=0`).
+BPW/unknown products require firmware support for dynamic joint-state feedback.
+When dynamic feedback is supported, missing, incomplete, stale or invalid data
+returns unavailable rather than legacy feedback. Reconnection clears cached snapshots. Joint-level
+control and leg odometry remain unsupported on BPW.
+
+### Dynamic joint temperatures
+
+Applications read joint temperatures through the C++ or Python getters below.
+Dynamic temperature feedback requires compatible robot firmware.
+
+Python `getJointTemperatures()` returns a fresh snapshot or `None`:
+
+```python
+snapshot = robot.getJointTemperatures()
+if snapshot is not None:
+    print("joints", len(snapshot["joints"]))
+    print(snapshot["timestamp_ms"], snapshot["age_ms"], snapshot["sequence"])
+    for joint in snapshot["joints"]:
+        print(joint["joint_id"], joint["motor_celsius"], joint["driver_celsius"])
+```
+
+The snapshot contains `timestamp_ms`, `age_ms`, `sequence`, `topology_revision`
+and `joints`. Each record has `joint_id`, `motor_celsius`, and `driver_celsius`;
+an unavailable sensor is `None`, including when the other sensor remains valid.
+Zero Celsius is valid. `timestamp_ms` is robot-relative monotonic sample time,
+not Unix time; `age_ms` is measured by the SDK's local steady clock. Snapshots
+aged 3000 ms or more are unavailable. Identify records by joint ID instead of
+assuming a fixed joint order or leg layout.
+Dynamic temperature feedback supports up to 512 joints, including 16- and 64-axis
+products, without truncating to 12 or 16 joints.
+
+C++ provides `getJointTemperatures(JointTemperatures*)` and
+`getJointTemperaturesValue()`. Python `getMotorTemperature()` /
+`getDriverTemperature()` return dynamic lists only when every reading of that
+sensor class is valid. C++ uses the new
+`getMotorTemperature(std::vector<float>&)` /
+`getDriverTemperature(std::vector<float>&)` overloads; failure leaves the output
+vector unchanged. Detailed snapshots can still expose valid records when a
+complete list is unavailable. The temperature snapshot types are `JointTemperature` and
+`JointTemperatures`. The four legacy C++ methods `getMotorTemperature(float[12])`,
+`getDriverTemperature(float[12])`, `getMotorTemperatureArray()`, and
+`getDriverTemperatureArray()` are **Deprecated**. They remain available with the
+same behavior, fixed 12-axis size, and BPW restriction. Migrate to the
+`std::vector<float>&` overloads above or `getJointTemperatures()` /
+`getJointTemperaturesValue()`. The vector overloads and Python's dynamic
+same-name temperature getters are not deprecated. `JOINT_COUNT` remains 12 for
+the legacy fixed-size interfaces.
+
+With older firmware, a clearly identified BPX/BPX-Pro may provide legacy 12-axis
+temperatures through the dynamic API (`topology_revision=0`). BPW and unknown
+products require firmware support for dynamic temperature feedback; otherwise,
+the getters return unavailable. When dynamic feedback is supported, missing,
+incomplete, stale or invalid data returns unavailable rather than legacy feedback.
+Reconnection clears cached temperature snapshots.
+
+The dynamic APIs require matching headers, native libraries and Python bindings.
+When building bindings or wheels, rebuild the native libraries from the same source
+revision on each target platform. The SDK version remains `2.0.0`.
 
 ## Before You Start
 
@@ -44,16 +210,25 @@ Update the SDK and ensure your robot firmware supports the features you intend t
 
 ## Directory Structure
 
+The main directories and commonly used files are:
+
 ```text
 mirrorme_robot_sdk/
   CMakeLists.txt
+  pyproject.toml
+  setup.py
+  cmake/
+    mirrorme_robot_sdk_extensions.cmake
   include/
     mirrorme_robot_sdk_config.h
     mirrorme_robot_sdk_version.h
     motion_types.h
+    joint_states.h
+    joint_temperatures.h
     request_robot_state.h
     motion_level_control.h
     joint_level_control.h
+    fault_code.h
   lib/
     libmirrorme_robot_sdk_x86_64.so
     libmirrorme_robot_sdk_aarch64.so
@@ -61,17 +236,44 @@ mirrorme_robot_sdk/
     mirrorme_robot_sdk_x86_64.lib
   bin/
     mirrorme_robot_sdk_x86_64.dll
+  mirrorme_robot_sdk/
+    __init__.py
+    __init__.pyi
+    py.typed
+  python/
+    mirrorme_robot_sdk_py.cpp
   example/
+    example_options.h
+    example_options.py
+    example_feedback.h
+    example_feedback.py
     request_robot_state_example.cpp
     request_robot_state_example.py
     motion_level_control_example.cpp
     motion_level_control_example.py
+    pose_tracking_example.cpp
+    pose_tracking_example.py
     joint_level_control_example.cpp
     joint_level_control_example.py
+    motion_level_control_server_example.cpp
+    motion_level_control_server_example.py
+    motion_level_control_client_example.cpp
+    motion_level_control_client_example.py
+  scripts/
+    build_wheels.py
+    build_linux_wheels.sh
+    build_macos_wheels.sh
+    build_windows_wheels.ps1
+    cibuildwheel-cp38.toml
   testcase/
+    CMakeLists.txt
+    motion_level_control_gait_test.cpp
+    python_api_smoke_test.py
     state_upload_rate_test.py
     tcp_reconnect_monitor.py
     tcp_reconnect_monitor_example.cpp
+  tests/
+  wheelhouse/
 ```
 
 ## General Configuration
@@ -83,8 +285,6 @@ Public configuration is defined in `include/mirrorme_robot_sdk_config.h`.
 | `DEFAULT_SERVER_IP`                   | Default robot IP used by the SDK.                          |
 | `DEFAULT_CLIENT_ROBOT_STATE_UDP_PORT` | Local port for receiving robot state packets.              |
 | `DEFAULT_CLIENT_JOINT_STATE_UDP_PORT` | Local port reserved for receiving joint state upload data. |
-
-Command destination ports are fixed on the robot side and are not exposed as public SDK configuration.
 
 The SDK default robot IP is `10.21.20.1` (RJ45 direct connection). To change the default IP, edit the
 configuration in `include/mirrorme_robot_sdk_config.h`, or call the `setRobotIp` API in your program to set the target
@@ -130,6 +330,8 @@ Gait `mirrorme_robot_sdk::MotionGait`:
 | `Running`      | `8`       |
 | `Tumbler` | `11` |
 | `Jump` | `12` |
+| `TrotRun` | `15` |
+| `Rough` | `16` |
 
 ### Gaits and Sub-gaits
 
@@ -137,7 +339,9 @@ For some gaits, the main gait must be interpreted together with the sub-gait ret
 
 | Main Gait      | Main Raw Value | Sub-gait      | Sub-gait Raw Value | Description       |
 | -------------- | -------------- | ------------- | ------------------ | ----------------- |
-| `Walk`         | `0`            | —             | —                  | Walking           |
+| `Walk`         | `0`            | —             | —                  | Walking / BPW flat |
+| `Rough` | `16` | — | — | BPW obstacle crossing only |
+| `TrotRun` | `15` | — | — | BPX-Pro jogging gait |
 | `Bipedal`      | `3`            | `F_HANDSTAND` | `-1`               | Inverted stance   |
 | `Bipedal`      | `3`            | `B_HANDSTAND` | `1`                | Upright stance    |
 | `Flip`         | `4`            | `GAIT_L_FLIP` | `-1`               | Left flip         |
@@ -181,12 +385,17 @@ Velocity commands use `[x, y, yaw]`, where `x` and `y` are body-frame linear vel
 | Gait           | Velocity Limit `[x, y, yaw]` |
 | -------------- | ---------------------------- |
 | `Walk`         | `[1.5, 0.5, 2.0]`            |
+| `TrotRun` (BPX-Pro) | `[2.5, 0.5, 2.0]` |
 | `Bipedal`      | `[0.8, 0.5, 1.5]`            |
 | `Flip`         | `[0.0, 0.0, 0.0]`            |
 | `WalkPhase`    | `[1.5, 1.0, 2.0]`            |
 | `PoseTracking` | `[0.0, 0.0, 0.0]`            |
 | `Running`      | `x: [-1.5, 3.0]`, `y: [-1.0, 1.0]`, `yaw: [-2.0, 2.0]` |
 | `Tumbler`      | `[0.0, 0.0, 0.0]`            |
+
+BPW firmware currently publishes flat limits `[4.0, 1.0, 3.0]` and obstacle crossing limits
+`[1.5, 1.0, 1.0]` (m/s, m/s, rad/s). Read `getMaxVelocity()` for the active policy
+limits; the preceding table describes BPX-family policies.
 
 `Flip` does not use walking velocity commands. `Tumbler` requests self-righting with six zero axes and does not use velocity commands. `PoseTracking` limits pose tracking commands instead of body velocity commands. For `Walk`, `Bipedal`, `WalkPhase`, and `Running`, lateral velocity and yaw rate are further reduced as `abs(x)` increases, so the table lists the per-axis base limits.
 
@@ -274,9 +483,15 @@ Main state APIs:
 
 | API                                   | Description                       |
 | ------------------------------------- | --------------------------------- |
-| `getJointPosition(float[12])`         | Joint positions in radians.       |
-| `getJointVelocity(float[12])`         | Joint velocities in rad/s.        |
-| `getJointTorque(float[12])`           | Joint torques.                    |
+| `getJointStates(JointStates*)` / `getJointStatesValue()` | Dynamic per-ID position/velocity/torque snapshot. |
+| `getJointPosition(std::vector<float>&)` / `getJointVelocity(std::vector<float>&)` / `getJointTorque(std::vector<float>&)` | Complete dynamic N-axis lists. |
+| `getJointPositionArray<N>()` / `getJointVelocityArray<N>()` / `getJointTorqueArray<N>()` | Optional arrays requiring exactly N joints. |
+| `getJointPosition(float[12])` | **Deprecated**: fixed 12-axis positions; unsupported on BPW. |
+| `getJointVelocity(float[12])` | **Deprecated**: fixed 12-axis velocities; unsupported on BPW. |
+| `getJointTorque(float[12])` | **Deprecated**: fixed 12-axis torques; unsupported on BPW. |
+| `getJointPositionArray()` | **Deprecated**: optional fixed 12-axis position array; use `getJointPositionArray<N>()`. |
+| `getJointVelocityArray()` | **Deprecated**: optional fixed 12-axis velocity array; use `getJointVelocityArray<N>()`. |
+| `getJointTorqueArray()` | **Deprecated**: optional fixed 12-axis torque array; use `getJointTorqueArray<N>()`. |
 | `getImuRpy(float[3])`                 | Body roll, pitch, and yaw.        |
 | `getImuQuat(float[4])`                | Body orientation quaternion.      |
 | `getImuAcc(float[3])`                 | IMU linear acceleration.          |
@@ -294,13 +509,19 @@ Main state APIs:
 | `getMaxVelocity(float[3])`            | Current maximum velocity limits.  |
 | `getBatteryLevel(uint8_t*)`           | Battery level as a percentage.    |
 | `getBatteryCurrent(float*)`           | Battery current.                  |
-| `getMotorTemperature(float[12])`      | Motor temperatures.               |
-| `getDriverTemperature(float[12])`     | Driver temperatures.              |
-| `getJointStateTimestamp(uint32_t*)`   | Latest joint state timestamp.     |
+| `getJointTemperatures(JointTemperatures*)` | Dynamic per-ID temperature snapshot with optional sensors and age. |
+| `getMotorTemperature(std::vector<float>&)` | Complete dynamic motor-temperature list. |
+| `getDriverTemperature(std::vector<float>&)` | Complete dynamic driver-temperature list. |
+| `getMotorTemperature(float[12])`      | **Deprecated**: fixed 12-axis motor temperatures. |
+| `getDriverTemperature(float[12])`     | **Deprecated**: fixed 12-axis driver temperatures. |
+| `getMotorTemperatureArray()` | **Deprecated**: optional fixed 12-axis motor-temperature array. |
+| `getDriverTemperatureArray()` | **Deprecated**: optional fixed 12-axis driver-temperature array. |
+| `getJointStateTimestamp(uint32_t*)`   | Dynamic: fresh snapshot low 32 bits; legacy BPX retains its prior behavior. |
 | `getImuTimestamp(uint32_t*)`          | Latest IMU data timestamp.        |
 | `getOdometryTimestamp(uint32_t*)`     | Latest odometry timestamp.        |
 | `getMotionStateTimestamp(uint32_t*)`  | Latest motion state timestamp.    |
 | `getBatteryTimestamp(uint32_t*)`      | Latest battery state timestamp.   |
+| `getFaultTimestamp(uint32_t*)` | Robot-relative timestamp in the latest fault packet header. |
 
 The SDK also provides optional helper APIs that return arrays, structs, or scalar values, such as `getJointPositionArray()`, `getImuRpyArray()`,
 `getLegOdomValue()`,
@@ -308,7 +529,45 @@ The SDK also provides optional helper APIs that return arrays, structs, or scala
 `getCurrentMotionStateEnum()`, `getCurrentGaitEnum()`, `getLastMotionStateEnum()`, and `getLastGaitEnum()`,
 which return `MotionState` or `MotionGait` directly.
 
-Example: `example/request_robot_state_example.cpp`
+Example: [C++](example/request_robot_state_example.cpp) / [Python](example/request_robot_state_example.py).
+
+### Request-state example coverage
+
+Both examples print a state frame every 200 ms. They display the connection state,
+cached identity/version when a connection is observed, actual N-axis position,
+velocity, torque and independent motor/driver-temperature lists, per-ID snapshots
+with validity and age, all four IMU groups, current/last motion and gait plus
+signed sub-gait, maximum velocity, supported leg odometry, power/charger/estop,
+and every available fault entry (up to 32, with its truncation flag).
+A missing value is `<unavailable>`; BPW leg odometry and its timestamp are
+`<unsupported>` and are skipped. One unavailable temperature list does not hide
+the other. Dynamic joint and temperature records remain visible even when a
+complete convenience list is unavailable.
+
+`connection: connecting`, `connected`, `disconnected; retrying`, `reconnected`
+and `stopped` describe changes observed by polling `isConnected()` every 200 ms;
+an outage shorter than a polling interval may be missed.
+Disconnected frames show only the connection flag and
+`telemetry=<unavailable: disconnected>`, suppressing cached telemetry. Ctrl+C or
+POSIX SIGTERM disconnects and exits cleanly. The SDK's existing reconnect behavior is unchanged.
+
+`robot state:` is the host display time. The `timestamps_ms` line lists the
+joint, IMU, odometry, motion, battery and fault packet timestamps from the robot;
+the joint convenience timestamp is 32 bits, while the joint snapshot retains its
+64-bit monotonic time. Fault `occurred_t_ms` is Unix epoch milliseconds. Do not
+subtract timestamps from different clock domains. Raw numeric motion/gait values
+are retained so newer firmware values remain visible.
+
+These examples demonstrate business reads rather than repeating every `Value` /
+`Array` wrapper or deprecated overload. Exact `Array<N>` sizing, deprecation
+compiler diagnostics, stale or invalid data rejection and other API boundaries
+belong to separate checks. [Example behavior tests](tests/test_request_robot_state_examples.py)
+run the real C++/Python processes against loopback peers, checking complete BPX
+feedback, BPW 16-axis partial readings, future 64-axis feedback, disconnect/reconnect
+and SIGTERM. Set `MIRRORME_ROBOT_SDK_EXAMPLE_BUILD=build` when running pytest
+to include the compiled C++ examples. [Joint-state](tests/test_python_joint_states.py) and
+[temperature](tests/test_python_capabilities.py) tests validate the underlying dynamic APIs.
+
 
 ### Robot Serial Number and Model (C++)
 
@@ -385,8 +644,10 @@ Control APIs:
 | ------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `setMotionCommandRate(uint16_t rate_hz)`   | Sets the periodic command send rate.                                                   |
 | `setVelocityControlFlag(bool enabled)`     | Enables or disables the velocity control flag in outgoing packets.                     |
-| `setZeroPositionsFlag()`                   | Sets the zero-position flag. Example programs send this before formal motion commands. |
-| `setWalk()`                                | Switches to normal walking gait.                                                       |
+| `setZeroPositionsFlag()` | Requests zero-position preparation for BPX/BPX-Pro; rejected on an identified BPW. |
+| `setWalk()`                                | Switches to normal walking gait; flat on BPW. |
+| `setTrotRun()` | Selects the existing BPX-Pro jogging gait (`TrotRun=15`); unsupported on BPW. |
+| `setRough()` | Selects the BPW obstacle crossing gait; returns false when unsupported or disconnected. |
 | `setRunning()`                             | Switches to running gait.                                                              |
 | `setTumbler()` | Requests BPX/BPX-Pro self-righting recovery while lying down; returns whether the request was sent. |
 | `setLeftFlip()`                            | Requests a left flip.                                                                  |
@@ -433,19 +694,49 @@ is in motion mode and commanded velocity is zero. Each call requests one jump.
 BPX-Pro does not support upright or inverted stance.
 
 
-Before calling `setZeroPositionsFlag()`, ensure the robot's feet, shanks, and the joints between shanks and thighs are all in contact with the ground.
-`example/motion_level_control_example.cpp` sends a zeroing command at startup by default, so before running
-`motion_level_control_example`, make sure the BPX is already in the required zeroing pose.
+On BPX/BPX-Pro, before calling `setZeroPositionsFlag()`, ensure the robot's feet,
+shanks, and the joints between shanks and thighs are all in contact with the ground.
+The C++ and Python motion demos identify the product before requesting zero-position
+preparation on BPX/BPX-Pro; BPW skips this request. The SDK also rejects the request
+when the connected product is identified as BPW.
 
-Example: `example/motion_level_control_example.cpp`
+### Motion demo sequence
+
+[C++](example/motion_level_control_example.cpp) and
+[Python](example/motion_level_control_example.py) use the same sequence:
+
+1. Wait up to 10 seconds for a completed connection, an identified BPX/BPX-Pro/BPW,
+   and motion-state/gait feedback. An unknown or unavailable model does not start motion.
+2. Request zero-position preparation on BPX/BPX-Pro, skip it on BPW, then prepare for 1 second.
+3. Request stand-up and wait up to 10 seconds for a new motion-feedback timestamp
+   reporting `Motion` (`6`).
+4. Select `Walk` with zero velocity and wait up to 10 seconds for new feedback
+   reporting state `6` and gait `Walk` (`0`); this is flat gait on BPW.
+5. Use SI velocity control to command `(x, y, yaw) = (0, 0, 1.0)` for 3 seconds:
+   yaw is **1.0 rad/s**, not a normalized input. Then command zero velocity for 2 seconds.
+6. Request sit-down, wait up to 10 seconds for new feedback reporting
+   `LyingDown` (`0`), then disconnect.
+
+The demo configures a 50 Hz command rate, runs its control loop every 20 ms, and
+prints feedback every 200 ms. Stand-up, Walk and sit-down confirmations require
+a new timestamp after that phase's first successful command; changing only the
+state/gait under an unchanged timestamp does not advance the demo. After the initial
+readiness check, a connection loss, motion timestamp that stops advancing
+for 1 second, a phase timeout or a command reporting failure stops the demo;
+it does not resume the sequence after an SDK reconnection.
+
+Ctrl+C or POSIX SIGTERM requests a clean exit. Cleanup attempts zero velocity only
+in the Walk/yaw/zero-velocity phases while still connected. After entering sit-down,
+the example's cleanup only calls `disconnect()`; it does not call `setVelocity()` again.
+These readiness and transition waits belong to the demo. SDK `connect()` starts
+a desired connection; the demo separately confirms readiness.
+
 
 ### Pose Tracking
 
 BPX and BPX-Pro support `setPoseTracking()` while already in `MotionState::Motion`. The request clears all six axes so the controller can change gait. A `true` result means sent; wait for `getCurrentGait()` / `getCurrentGaitEnum()` to report `PoseTracking` before sending nonzero input.
 
-`setPose(x, y, z, r)` accepts four finite normalized values in `[-1, 1]` in both C++ and Python; `r` is the yaw input. These are not pose values in meters or radians. The SDK fills the wire channels as `[x, y, r, z, 0, 0]`, keeping the two unexposed channels at zero.
-
-Before per-axis scaling, the current controller maps these inputs to `[-y, x, r, 0, 0, z]`, preserving the existing X/Y swap and resulting X inversion. The SDK does not duplicate this mapping.
+`setPose(x, y, z, r)` accepts four finite normalized values in `[-1, 1]` in both C++ and Python; `r` is the yaw input. These are not pose values in meters or radians.
 
 - `setPose()` always uses normalized control without changing the velocity-control preference set for ordinary motion. Calling `setVelocityControlFlag(false)` first is unnecessary.
 - It returns `false` for invalid values, an unavailable connection, or unless pose tracking was selected in the current connection and no other gait has since been selected. Rejected input preserves the last valid command. Python raises `TypeError` for incorrect argument counts or types.
@@ -644,8 +935,10 @@ the robot is fault-free. `None`/false only means no fault packet has been receiv
 yet (e.g. an older robot). `occurred_t_ms` is Unix epoch milliseconds; use the
 bitfield helpers in `fault_code.h` (`DecodeFaultSeverity/Module/SubModule/SubCode`)
 to render a code. The examples show a `faults=<count>[+truncated] top=0x…`
-summary. Requires robot firmware that publishes the channel; `getFaultTimestamp()`
-returns the snapshot's receive time on the monotonic clock.
+summary. The Request-state examples additionally print every entry and its epoch
+occurrence time. Requires robot firmware that publishes the channel;
+`getFaultTimestamp()` returns the robot-relative timestamp carried in the fault
+packet header, separate from the epoch occurrence times.
 
 #### Currently reported fault codes
 
@@ -763,10 +1056,7 @@ use `-DisableProxy`. The original proxy settings are restored when the script ex
 ```
 
 On local macOS machines, `cibuildwheel` only uses python.org CPython framework installs.
-The build script skips configured CPython versions that are not installed locally. In
-GitHub Actions, the full configured CPython matrix is built.
-
-The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheels in four parallel jobs: Windows AMD64, Linux x86_64, Linux aarch64, and macOS arm64. Linux uses native `ubuntu-22.04` and `ubuntu-22.04-arm` runners, one architecture per job, without QEMU emulation. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts.
+The build script skips configured CPython versions that are not installed locally.
 
 To install from a local wheelhouse:
 
@@ -887,6 +1177,17 @@ python3 example/motion_level_control_client_example.py status
 The server listens on `127.0.0.1:50051` by default. For separate machines, set the server's `--listen-ip` and the client's `--server-ip`; use `--listen-port` and `--server-port` to change the port. This example has no authentication and is intended for trusted networks. The server handles client connections sequentially; running a client without a command starts interactive mode.
 
 `status` reports connection status, SN, model, ControlMode, current/previous motion state, gait, maximum velocity, battery level/current, and both charger inputs. Missing fields show `<unavailable>`. The server prints status every second with a local timestamp including milliseconds, keeping `battery_level`, `battery_current`, `charger_in1`, `charger_in2`, and `hard_estop` on the same line.
+
+The example command is now `gait run`, which calls `setRunning()` / `MotionGait.Running = 8`;
+`gait running` is rejected, and BPW does not support `run`. Update and restart the server
+when adopting the renamed command; SDK API and enum names are unchanged.
+
+BPX-Pro also exposes the existing native jogging gait through
+`setTrotRun()` / `MotionGait.TrotRun = 15` in Python and the `gait trotrun`
+example command (limits `[2.5, 0.5, 2.0]`).
+
+On BPW, use `gait walk` for flat and `gait rough` for obstacle crossing; unsupported
+actions return an error. On other models, `gait rough` reports unsupported.
 
 Commands include `zero`, `stand`, `tumbler`, `sit`, `charging-sit`, `damping`, `stop`, `velocity X Y YAW`, `velocity-control on|off`, and `gait NAME`. For BPX, `jump up|front|back|left|right` selects the five jump directions. Available actions depend on the robot model. Use the client’s `-h`/`--help` to view all commands without connecting. While connected, use `help` to list commands and gait/jump choices; `quit` (or `shutdown`) stops the server. An `OK` response means the server handled the command, not that the robot completed the action.
 

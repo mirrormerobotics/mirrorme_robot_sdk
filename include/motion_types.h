@@ -37,6 +37,8 @@ enum class MotionGait : uint8_t {
     WalkPhase = 6,
     PoseTracking = 7,
     Running = 8,
+    TrotRun = 15,  // BPX-Pro medium-speed gait.
+    Rough = 16,    // BPW rough-terrain gait; flat terrain uses Walk.
     Tumbler = 11,
     Jump = 12,
 };

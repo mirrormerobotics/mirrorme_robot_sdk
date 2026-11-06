@@ -116,7 +116,7 @@ void printUsage(const char* program) {
         << "\n"
         << "Commands: zero, stand, tumbler, sit, charging-sit, damping, stop, status,\n"
         << "          velocity X Y YAW, velocity-control on|off,\n"
-        << "          gait walk|running|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip,\n"
+        << "          gait walk|rough|trotrun|run|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip,\n"
         << "          jump up|front|back|left|right, quit\n";
 }
 
@@ -320,6 +320,10 @@ const char* motionGaitName(uint8_t gait) {
             return "Jump";
         case mirrorme_robot_sdk::MotionGait::Walk:
             return "Walk";
+        case mirrorme_robot_sdk::MotionGait::TrotRun:
+            return "TrotRun";
+        case mirrorme_robot_sdk::MotionGait::Rough:
+            return "Rough";
         case mirrorme_robot_sdk::MotionGait::Bipedal:
             return "Bipedal";
         case mirrorme_robot_sdk::MotionGait::Flip:
@@ -366,6 +370,7 @@ std::string statusLineUnlocked(mirrorme_robot_sdk::MotionLevelControl& motion) {
     output << " max_vel=";
     if (motion.getMaxVelocity(velocity)) output << "(" << velocity[0] << "," << velocity[1] << "," << velocity[2] << ")";
     else output << "<unavailable>";
+    output << " joint_count=" << mirrorme_robot_sdk::example::formatJointCount(motion);
     output << " " << mirrorme_robot_sdk::example::formatPowerState(motion);
     return output.str();
 }
@@ -413,11 +418,19 @@ bool executeCommand(mirrorme_robot_sdk::MotionLevelControl& motion,
 
     const std::string& command = words[0];
     if (command == "help") {
-        *response = "OK commands: zero, stand, tumbler, sit, charging-sit, damping, stop, status, velocity X Y YAW, velocity-control on|off, gait walk|running|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip, jump up|front|back|left|right, help, quit|shutdown";
+        *response = "OK commands: zero, stand, tumbler, sit, charging-sit, damping, stop, status, velocity X Y YAW, velocity-control on|off, gait walk|rough|trotrun|run|bipedal|inv_bipedal|pronk|pace|bound|left_flip|right_flip, jump up|front|back|left|right, help, quit|shutdown";
         return false;
     }
 
     std::lock_guard<std::mutex> lock(sdk_mutex);
+    const auto model = motion.getRobotModelValue();
+    if (model && *model == mirrorme_robot_sdk::RobotModel::BPW &&
+        (command == "zero" || command == "tumbler" || command == "charging-sit" ||
+         command == "jump" || (command == "gait" && words.size() == 2 &&
+                               words[1] != "walk" && words[1] != "rough"))) {
+        *response = "ERR unsupported on BPW: " + line;
+        return false;
+    }
     if (command == "zero") {
         motion.setZeroPositionsFlag();
         *response = "OK zero-position flag sent";
@@ -502,8 +515,14 @@ bool executeCommand(mirrorme_robot_sdk::MotionLevelControl& motion,
             return false;
         }
         const std::string& gait = words[1];
+        if (gait == "rough") {
+            *response = motion.setRough() ? "OK gait command sent"
+                : "ERR rough gait unsupported or not connected (BPW only)";
+            return false;
+        }
         if (gait == "walk") motion.setWalk();
-        else if (gait == "running") motion.setRunning();
+        else if (gait == "trotrun") motion.setTrotRun();
+        else if (gait == "run") motion.setRunning();
         else if (gait == "bipedal") motion.setBipedal();
         else if (gait == "inv_bipedal") motion.setInvBipedal();
         else if (gait == "pronk") motion.setPronk();

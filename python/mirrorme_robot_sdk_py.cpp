@@ -7,12 +7,15 @@
 #include "motion_level_control.h"
 #include "motion_types.h"
 #include "request_robot_state.h"
+#include "joint_temperatures.h"
+#include "joint_states.h"
 
 #include <array>
 #include <cstdint>
 #include <exception>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -518,16 +521,124 @@ PyObject* state_get_robot_model(PyObject* self, PyObject*) {
         return state_float_array(self, &RequestRobotState::cpp_name, count); \
     }
 
-STATE_FLOAT_ARRAY_METHOD(state_get_joint_position, getJointPosition, 12)
-STATE_FLOAT_ARRAY_METHOD(state_get_joint_velocity, getJointVelocity, 12)
-STATE_FLOAT_ARRAY_METHOD(state_get_joint_torque, getJointTorque, 12)
 STATE_FLOAT_ARRAY_METHOD(state_get_imu_rpy, getImuRpy, 3)
 STATE_FLOAT_ARRAY_METHOD(state_get_imu_quat, getImuQuat, 4)
 STATE_FLOAT_ARRAY_METHOD(state_get_imu_acc, getImuAcc, 3)
 STATE_FLOAT_ARRAY_METHOD(state_get_imu_omega, getImuOmega, 3)
-STATE_FLOAT_ARRAY_METHOD(state_get_motor_temperature, getMotorTemperature, 12)
-STATE_FLOAT_ARRAY_METHOD(state_get_driver_temperature, getDriverTemperature, 12)
 STATE_FLOAT_ARRAY_METHOD(state_get_max_velocity, getMaxVelocity, 3)
+
+PyObject* optional_joint_float(const std::optional<float>& value) {
+    if (value) return PyFloat_FromDouble(*value);
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+PyObject* state_get_joint_states(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    try {
+        mirrorme_robot_sdk::JointStates value;
+        if (!cpp->getJointStates(&value)) Py_RETURN_NONE;
+        PyObject* joints = PyList_New(static_cast<Py_ssize_t>(value.joints.size()));
+        if (!joints) return nullptr;
+        for (size_t i = 0; i < value.joints.size(); ++i) {
+            const auto& joint = value.joints[i];
+            PyObject* position = optional_joint_float(joint.position);
+            PyObject* velocity = optional_joint_float(joint.velocity);
+            PyObject* torque = optional_joint_float(joint.torque);
+            if (!position || !velocity || !torque) {
+                Py_XDECREF(position); Py_XDECREF(velocity); Py_XDECREF(torque); Py_DECREF(joints); return nullptr;
+            }
+            PyObject* item = Py_BuildValue("{s:I,s:O,s:O,s:O}", "joint_id", joint.joint_id,
+                "position", position, "velocity", velocity, "torque", torque);
+            Py_DECREF(position); Py_DECREF(velocity); Py_DECREF(torque);
+            if (!item) { Py_DECREF(joints); return nullptr; }
+            PyList_SET_ITEM(joints, static_cast<Py_ssize_t>(i), item);
+        }
+        PyObject* result = Py_BuildValue("{s:K,s:K,s:I,s:I,s:O}",
+            "timestamp_ms", static_cast<unsigned long long>(value.timestamp_ms),
+            "age_ms", static_cast<unsigned long long>(value.age_ms), "sequence", value.sequence,
+            "topology_revision", value.topology_revision, "joints", joints);
+        Py_DECREF(joints);
+        return result;
+    } catch (const std::exception& exc) {
+        PyErr_SetString(PyExc_RuntimeError, exc.what()); return nullptr;
+    }
+}
+
+#define STATE_FLOAT_VECTOR_METHOD(py_name, cpp_name)                 \
+    PyObject* py_name(PyObject* self, PyObject*) {                    \
+        RequestRobotState* cpp = state_cpp(self);                    \
+        if (!cpp) return nullptr;                                   \
+        try {                                                       \
+            std::vector<float> values;                              \
+            if (!cpp->cpp_name(values)) Py_RETURN_NONE;               \
+            return float_array_to_list(values.data(), values.size());\
+        } catch (const std::exception& exc) {                        \
+            PyErr_SetString(PyExc_RuntimeError, exc.what());          \
+            return nullptr;                                         \
+        }                                                           \
+    }
+
+STATE_FLOAT_VECTOR_METHOD(state_get_joint_position, getJointPosition)
+STATE_FLOAT_VECTOR_METHOD(state_get_joint_velocity, getJointVelocity)
+STATE_FLOAT_VECTOR_METHOD(state_get_joint_torque, getJointTorque)
+
+PyObject* state_get_joint_temperatures(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    try {
+        mirrorme_robot_sdk::JointTemperatures value;
+        if (!cpp->getJointTemperatures(&value)) Py_RETURN_NONE;
+        PyObject* joints = PyList_New(static_cast<Py_ssize_t>(value.joints.size()));
+        if (!joints) return nullptr;
+        for (size_t i = 0; i < value.joints.size(); ++i) {
+            const auto& joint = value.joints[i];
+            PyObject* motor = joint.motor_celsius ? PyFloat_FromDouble(*joint.motor_celsius) : Py_None;
+            PyObject* driver = joint.driver_celsius ? PyFloat_FromDouble(*joint.driver_celsius) : Py_None;
+            if (!joint.motor_celsius) Py_INCREF(motor);
+            if (!joint.driver_celsius) Py_INCREF(driver);
+            if (!motor || !driver) { Py_XDECREF(motor); Py_XDECREF(driver); Py_DECREF(joints); return nullptr; }
+            PyObject* item = Py_BuildValue("{s:I,s:O,s:O}", "joint_id", joint.joint_id,
+                "motor_celsius", motor, "driver_celsius", driver);
+            Py_DECREF(motor); Py_DECREF(driver);
+            if (!item) { Py_DECREF(joints); return nullptr; }
+            PyList_SET_ITEM(joints, static_cast<Py_ssize_t>(i), item);
+        }
+        PyObject* result = Py_BuildValue("{s:K,s:K,s:I,s:I,s:O}",
+            "timestamp_ms", static_cast<unsigned long long>(value.timestamp_ms),
+            "age_ms", static_cast<unsigned long long>(value.age_ms), "sequence", value.sequence,
+            "topology_revision", value.topology_revision, "joints", joints);
+        Py_DECREF(joints);
+        return result;
+    } catch (const std::exception& exc) {
+        PyErr_SetString(PyExc_RuntimeError, exc.what()); return nullptr;
+    }
+}
+
+PyObject* state_get_motor_temperature(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    try {
+        std::vector<float> values;
+        if (!cpp->getMotorTemperature(values)) Py_RETURN_NONE;
+        return float_array_to_list(values.data(), values.size());
+    } catch (const std::exception& exc) {
+        PyErr_SetString(PyExc_RuntimeError, exc.what()); return nullptr;
+    }
+}
+
+PyObject* state_get_driver_temperature(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    try {
+        std::vector<float> values;
+        if (!cpp->getDriverTemperature(values)) Py_RETURN_NONE;
+        return float_array_to_list(values.data(), values.size());
+    } catch (const std::exception& exc) {
+        PyErr_SetString(PyExc_RuntimeError, exc.what()); return nullptr;
+    }
+}
 
 PyObject* state_get_leg_odom(PyObject* self, PyObject*) {
     RequestRobotState* cpp = state_cpp(self);
@@ -631,6 +742,7 @@ PyObject* motion_set_zero_positions_flag(PyObject* self, PyObject*) {
     }
 
 MOTION_VOID_METHOD(motion_set_walk, setWalk)
+MOTION_VOID_METHOD(motion_set_trot_run, setTrotRun)
 MOTION_VOID_METHOD(motion_set_running, setRunning)
 MOTION_VOID_METHOD(motion_set_left_flip, setLeftFlip)
 MOTION_VOID_METHOD(motion_set_right_flip, setRightFlip)
@@ -680,6 +792,7 @@ PyObject* motion_set_pose(PyObject* self, PyObject* args) {
     }
 
 MOTION_BOOL_METHOD(motion_set_stand_up, setStandUp)
+MOTION_BOOL_METHOD(motion_set_rough, setRough)
 MOTION_BOOL_METHOD(motion_set_tumbler, setTumbler)
 MOTION_BOOL_METHOD(motion_set_pose_tracking, setPoseTracking)
 MOTION_BOOL_METHOD(motion_set_sit_down, setSitDown)
@@ -827,6 +940,8 @@ PyMethodDef StateMethods[] = {
     METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
     METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
     METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
+    METHOD("getJointStates", state_get_joint_states, METH_NOARGS, "Return a fresh N-axis joint snapshot with IDs and optional position/velocity/torque, or None."),
+    METHOD("getJointTemperatures", state_get_joint_temperatures, METH_NOARGS, "Return a fresh dynamic temperature snapshot with joint IDs and optional Celsius readings, or None when unavailable or stale."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -873,6 +988,8 @@ PyMethodDef MotionMethods[] = {
     METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
     METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
     METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
+    METHOD("getJointStates", state_get_joint_states, METH_NOARGS, "Return a fresh N-axis joint snapshot with IDs and optional position/velocity/torque, or None."),
+    METHOD("getJointTemperatures", state_get_joint_temperatures, METH_NOARGS, "Return a fresh dynamic temperature snapshot with joint IDs and optional Celsius readings, or None when unavailable or stale."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -905,6 +1022,9 @@ PyMethodDef MotionMethods[] = {
     METHOD("setVelocityControlFlag", motion_set_velocity_control_flag, METH_VARARGS, nullptr),
     METHOD("setZeroPositionsFlag", motion_set_zero_positions_flag, METH_NOARGS, nullptr),
     METHOD("setWalk", motion_set_walk, METH_NOARGS, nullptr),
+    METHOD("setTrotRun", motion_set_trot_run, METH_NOARGS, "Select BPX-Pro medium-speed gait (15); unsupported on BPW."),
+    METHOD("setRough", motion_set_rough, METH_NOARGS,
+           "Select BPW rough gait (16); False when disconnected or unsupported by the robot model."),
     METHOD("setRunning", motion_set_running, METH_NOARGS, nullptr),
     METHOD("setTumbler", motion_set_tumbler, METH_NOARGS,
            "BPX/BPX-Pro self-righting request from LyingDown; True means sent, not completed."),
@@ -948,6 +1068,8 @@ PyMethodDef JointMethods[] = {
     METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
     METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
     METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
+    METHOD("getJointStates", state_get_joint_states, METH_NOARGS, "Return a fresh N-axis joint snapshot with IDs and optional position/velocity/torque, or None."),
+    METHOD("getJointTemperatures", state_get_joint_temperatures, METH_NOARGS, "Return a fresh dynamic temperature snapshot with joint IDs and optional Celsius readings, or None when unavailable or stale."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -1097,6 +1219,8 @@ PyMODINIT_FUNC PyInit__mirrorme_robot_sdk() {
     add_int_constant(module, "MOTION_STATE_MOTION", static_cast<long>(mirrorme_robot_sdk::MotionState::Motion));
 
     add_int_constant(module, "MOTION_GAIT_WALK", static_cast<long>(mirrorme_robot_sdk::MotionGait::Walk));
+    add_int_constant(module, "MOTION_GAIT_TROT_RUN", static_cast<long>(mirrorme_robot_sdk::MotionGait::TrotRun));
+    add_int_constant(module, "MOTION_GAIT_ROUGH", static_cast<long>(mirrorme_robot_sdk::MotionGait::Rough));
     add_int_constant(module, "MOTION_GAIT_BIPEDAL", static_cast<long>(mirrorme_robot_sdk::MotionGait::Bipedal));
     add_int_constant(module, "MOTION_GAIT_FLIP", static_cast<long>(mirrorme_robot_sdk::MotionGait::Flip));
     add_int_constant(module, "MOTION_GAIT_WALK_PHASE", static_cast<long>(mirrorme_robot_sdk::MotionGait::WalkPhase));

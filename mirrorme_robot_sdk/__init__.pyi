@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import List, Optional, Sequence, TypedDict
+from typing import List, Optional, Sequence, Tuple, TypedDict
 
 __version__: str
 DEFAULT_CLIENT_JOINT_STATE_UDP_PORT: int
@@ -32,6 +32,8 @@ class MotionState(IntEnum):
 
 class MotionGait(IntEnum):
     Walk: int
+    TrotRun: int
+    Rough: int
     Bipedal: int
     Flip: int
     WalkPhase: int
@@ -39,6 +41,35 @@ class MotionGait(IntEnum):
     Running: int
     Tumbler: int
     Jump: int
+
+
+class JointState(TypedDict):
+    joint_id: int
+    position: Optional[float]
+    velocity: Optional[float]
+    torque: Optional[float]
+
+
+class JointStates(TypedDict):
+    timestamp_ms: int
+    age_ms: int
+    sequence: int
+    topology_revision: int
+    joints: List[JointState]
+
+
+class JointTemperature(TypedDict):
+    joint_id: int
+    motor_celsius: Optional[float]
+    driver_celsius: Optional[float]
+
+
+class JointTemperatures(TypedDict):
+    timestamp_ms: int
+    age_ms: int
+    sequence: int
+    topology_revision: int
+    joints: List[JointTemperature]
 
 
 class LegOdom(TypedDict):
@@ -72,7 +103,10 @@ class RequestRobotState:
     def setTcpLocalPort(self, port: int) -> None: ...
     def setSessionId(self, session_id: int) -> None: ...
     def getRobotSerialNumber(self) -> Optional[str]: ...
+    def getRobotVersion(self) -> Optional[Tuple[int, int, int, int, int, int]]: ...
     def getRobotModel(self) -> Optional[int]: ...
+    def getJointStates(self) -> Optional[JointStates]: ...
+    def getJointTemperatures(self) -> Optional[JointTemperatures]: ...
     def getControlMode(self) -> Optional[int]: ...
     def getJointPosition(self) -> Optional[List[float]]: ...
     def getJointVelocity(self) -> Optional[List[float]]: ...
@@ -109,6 +143,8 @@ class MotionLevelControl(RequestRobotState):
     def setVelocityControlFlag(self, enabled: bool) -> None: ...
     def setZeroPositionsFlag(self) -> None: ...
     def setWalk(self) -> None: ...
+    def setTrotRun(self) -> None: ...
+    def setRough(self) -> bool: ...
     def setRunning(self) -> None: ...
     def setTumbler(self) -> bool: ...
     def setPoseTracking(self) -> bool: ...
